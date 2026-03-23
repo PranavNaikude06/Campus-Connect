@@ -1,4 +1,6 @@
 # Dependencies
+node_modules
+**/node_modules
 node_modules/
 
 # Environment Variables
@@ -8,8 +10,7 @@ node_modules/
 # Build outputs
 dist/
 build/
-
-# IDE and OS files
+**/.DS_Store
 .DS_Store
 .vscode/
 
