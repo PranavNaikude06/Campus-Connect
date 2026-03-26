@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ProgressBarLoader } from './LoadingScreens';
 
 interface Props { onLogout: () => void; user?: any; }
 
@@ -43,14 +44,17 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState('');
   const [orgData, setOrgData] = useState(user || {});
+  const [dashLoading, setDashLoading] = useState(true);
 
   const [myRegistrants, setMyRegistrants] = useState<any[]>([]);
 
   useEffect(() => {
+    setDashLoading(true);
     fetch('http://localhost:5000/api/events')
       .then(res => res.json())
       .then(data => setEvents(data))
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setDashLoading(false));
   }, []);
 
   useEffect(() => {
@@ -215,6 +219,14 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (dashLoading) {
+    return (
+      <div style={g.page}>
+        <ProgressBarLoader message="Loading organizer dashboard..." />
       </div>
     );
   }

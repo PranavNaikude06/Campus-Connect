@@ -2,311 +2,270 @@ import { useEffect, useRef } from 'react';
 
 export default function ParticleBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
-    let W = window.innerWidth;
-    let H = window.innerHeight;
-    canvas.width = W;
-    canvas.height = H;
+    // The WebGL initialization code is exactly as requested, inside the useEffect.
+    const gl = (canvas.getContext('webgl', { antialias: false }) || 
+                canvas.getContext('experimental-webgl', { antialias: false })) as WebGLRenderingContext | null;
+    
+    if (!gl) {
+      console.error('WebGL is unsupported');
+      return;
+    }
 
-    let mouseX = W / 2;
-    let mouseY = H / 2;
-    let animId: number;
-    let time = 0;
+    const MAX_DROPS = 32;
 
-    const onMouseMove = (e: MouseEvent) => { mouseX = e.clientX; mouseY = e.clientY; };
-    window.addEventListener('mousemove', onMouseMove);
-    const onResize = () => {
-      W = window.innerWidth; H = window.innerHeight;
-      canvas.width = W; canvas.height = H;
+    const VS = `
+      attribute vec2 a_pos;
+      varying vec2 v_uv;
+      void main(){
+        v_uv = a_pos * 0.5 + 0.5;
+        gl_Position = vec4(a_pos, 0.0, 1.0);
+      }
+    `;
+
+    const FS = `
+      precision highp float;
+      #define MAX_DROPS 32
+
+      uniform vec2 u_res;
+      uniform float u_time;
+      uniform vec4 u_drops[MAX_DROPS];
+      uniform int u_ndrop;
+
+      varying vec2 v_uv;
+
+      vec2 hash2(vec2 p){
+        p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+        return -1.0 + 2.0*fract(sin(p)*43758.5453);
+      }
+      float noise(vec2 p){
+        vec2 i=floor(p), f=fract(p), u=f*f*(3.0-2.0*f);
+        return mix(mix(dot(hash2(i),f), dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),
+                   mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)), dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);
+      }
+      float fbm(vec2 p){
+        float v=0.0, a=0.5;
+        mat2 m = mat2(1.6,1.2,-1.2,1.6);
+        for(int i=0;i<5;i++){ v+=a*noise(p); p=m*p; a*=0.5; }
+        return v;
+      }
+
+      float ripple(vec2 uv, vec2 src, float age){
+        vec2 asp = vec2(u_res.x/u_res.y, 1.0);
+        float d = length((uv - src) * asp);
+        float speed = 0.55;
+        float freq = 28.0;
+        float waveR = age * speed;
+        float decay = exp(-age * 1.8) * smoothstep(0.0, 0.06, waveR);
+        float ring = exp(-pow((d - waveR)*freq, 2.0));
+        // Reduced intensity from 0.032 to 0.018 for a softer, more subtle effect
+        return sin(d * freq - age * 14.0) * ring * decay * 0.018;
+      }
+
+      void main(){
+        float t = u_time;
+        float h = 0.0, hx = 0.0, hy = 0.0, eps = 0.003;
+
+        for(int i = 0; i < MAX_DROPS; i++){
+          if(i >= u_ndrop) break;
+          vec2 pos = u_drops[i].xy;
+          float age = t - u_drops[i].z;
+          if(age < 0.0 || age > 3.5) continue;
+          h  += ripple(v_uv, pos, age);
+          hx += ripple(v_uv+vec2(eps,0), pos, age);
+          hy += ripple(v_uv+vec2(0,eps), pos, age);
+        }
+
+        vec2 norm = vec2(hx - h, hy - h) / eps;
+        vec2 refUV = v_uv + norm * 1.4;
+
+        vec2 uv2 = (refUV - 0.5) * vec2(u_res.x/u_res.y, 1.0);
+        float s = t * 0.14;
+        vec2 q  = vec2(fbm(uv2 + s*0.5), fbm(uv2 + vec2(5.2,1.3) + s*0.4));
+        vec2 r  = vec2(fbm(uv2 + 2.0*q + vec2(1.7,9.2) + s*0.3), fbm(uv2 + 2.0*q + vec2(8.3,2.8) + s*0.25));
+        float f = fbm(uv2 + 2.5*r + s*0.2);
+        f = smoothstep(-0.05, 1.05, f);
+
+        vec3 col = mix(vec3(0.010,0.018,0.055), vec3(0.06,0.01,0.22), f);
+        col = mix(col, vec3(0.12,0.03,0.58), pow(f,1.8)*0.72);
+        col = mix(col, vec3(0.0,0.82,0.98), pow(max(f-0.52,0.0)*2.2, 2.2)*0.60);
+        col = mix(col, vec3(1.0,0.67,0.0), pow(max(f-0.80,0.0)*5.0, 3.0)*0.28);
+
+        float spec = pow(max(dot(normalize(vec3(norm, 0.5)), normalize(vec3(0.3,0.4,1.0))),0.0), 22.0);
+        col += vec3(0.5,0.95,1.0) * spec * 0.6;
+        col += vec3(0.0, 0.7, 1.0) * smoothstep(0.004, 0.018, abs(h)) * 0.4;
+
+        float vig = v_uv.x * v_uv.y * (1.0-v_uv.x) * (1.0-v_uv.y);
+        col *= pow(clamp(vig * 16.0, 0.0, 1.0), 0.18) * 0.82;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `;
+
+    function compile(type: number, src: string) {
+      if (!gl) return null;
+      const s = gl.createShader(type);
+      if (!s) return null;
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+      return s;
+    }
+
+    const prog = gl.createProgram();
+    if (!prog || !gl) return;
+    
+    const vs = compile(gl.VERTEX_SHADER, VS);
+    const fs = compile(gl.FRAGMENT_SHADER, FS);
+    if (!vs || !fs) return;
+    
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    const uRes = gl.getUniformLocation(prog, 'u_res');
+    const uTime = gl.getUniformLocation(prog, 'u_time');
+    const uNdrop = gl.getUniformLocation(prog, 'u_ndrop');
+    const uDrops: (WebGLUniformLocation | null)[] = [];
+    for(let i=0; i<MAX_DROPS; i++) {
+        uDrops.push(gl.getUniformLocation(prog, `u_drops[${i}]`));
+    }
+
+    function resize() {
+      if (!canvas || !gl) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Resize initially and bind event
+    resize();
+    window.addEventListener('resize', resize);
+
+    const drops = new Array(MAX_DROPS).fill(null).map(()=>({x:0, y:0, t:-999}));
+    let dropHead = 0;
+
+    const start = performance.now();
+    function now() { return (performance.now() - start) * 0.001; }
+
+    function addDrop(px: number, py: number) {
+      drops[dropHead] = { x: px / window.innerWidth, y: 1.0 - py / window.innerHeight, t: now() };
+      dropHead = (dropHead + 1) % MAX_DROPS;
+    }
+
+    /* throttle drops while dragging so we don't flood the buffer */
+    let lastDrop = 0;
+    function onMove(px: number, py: number) {
+      const n = now();
+      if(n - lastDrop > 0.055){ /* ~18 drops/sec max */
+        addDrop(px, py);
+        lastDrop = n;
+      }
+    }
+
+    // EVENT LISTENERS STORED AS NAMED FUNCTIONS FOR CLEANUP
+    const handleMouseMove = (e: MouseEvent) => {
+      onMove(e.clientX, e.clientY);
+      
+      // Update custom cursor
+      if (cursorRef.current) {
+        cursorRef.current.style.left = e.clientX + 'px';
+        cursorRef.current.style.top = e.clientY + 'px';
+      }
     };
-    window.addEventListener('resize', onResize);
-
-    // STARS
-    const stars = Array.from({ length: 250 }, () => ({
-      x: Math.random() * W, y: Math.random() * H,
-      r: Math.random() * 1.8 + 0.3,
-      alpha: Math.random() * 0.8 + 0.2,
-      speed: Math.random() * 0.02 + 0.005,
-      offset: Math.random() * Math.PI * 2,
-    }));
-
-    // ORBS
-    const ORB_COLORS = [
-      { r: 108, g: 99, b: 255 },
-      { r: 0,   g: 198, b: 255 },
-      { r: 255, g: 101, b: 132 },
-      { r: 67,  g: 233, b: 123 },
-      { r: 247, g: 151, b: 30  },
-      { r: 236, g: 72,  b: 153 },
-      { r: 99,  g: 220, b: 200 },
-    ];
-
-    const orbs = Array.from({ length: 16 }, (_, i) => {
-      const depth = Math.random() * 0.8 + 0.2;
-      const col = ORB_COLORS[i % ORB_COLORS.length];
-      return {
-        baseX: Math.random() * W, baseY: Math.random() * H,
-        x: 0, y: 0,
-        radius: depth * 90 + 30,
-        depth, col,
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: (Math.random() - 0.5) * 0.15,
-        floatAmp: Math.random() * 40 + 20,
-        floatSpeed: Math.random() * 0.5 + 0.15,
-        floatOff: Math.random() * Math.PI * 2,
-        pulseOff: Math.random() * Math.PI * 2,
-      };
-    });
-
-    // NODES (particle network)
-    const nodes = Array.from({ length: 80 }, () => ({
-      x: Math.random() * W, y: Math.random() * H,
-      vx: (Math.random() - 0.5) * 0.6,
-      vy: (Math.random() - 0.5) * 0.6,
-      r: Math.random() * 2 + 1,
-    }));
-
-    // RINGS
-    const rings = Array.from({ length: 8 }, (_, i) => ({
-      cx: Math.random() * W,
-      cy: Math.random() * H,
-      rx: Math.random() * 140 + 50,
-      tilt: Math.random() * Math.PI,
-      rot: Math.random() * Math.PI,
-      rotSpeed: (Math.random() - 0.5) * 0.006,
-      tiltSpeed: (Math.random() - 0.5) * 0.004,
-      col: ORB_COLORS[i % ORB_COLORS.length],
-      alpha: 0.06 + Math.random() * 0.1,
-      lw: Math.random() * 1.5 + 0.5,
-    }));
-
-    // SHOOTING STARS
-    type ShootingStar = { x: number; y: number; len: number; speed: number; alpha: number; active: boolean };
-    const shooters: ShootingStar[] = [];
-    const spawnShooter = () => {
-      shooters.push({
-        x: Math.random() * W * 0.8, y: Math.random() * H * 0.4,
-        len: Math.random() * 120 + 60,
-        speed: Math.random() * 7 + 5,
-        alpha: 1, active: true,
-      });
+    const handleClick = (e: MouseEvent) => addDrop(e.clientX, e.clientY);
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      onMove(e.touches[0].clientX, e.touches[0].clientY);
     };
+    const handleTouchStart = (e: TouchEvent) => addDrop(e.touches[0].clientX, e.touches[0].clientY);
 
-    // DRAW
-    const draw = () => {
-      time += 0.016;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('click', handleClick);
+    window.addEventListener('touchmove', handleTouchMove as any, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart as any, { passive: true });
 
-      // Background gradient
-      const bg = ctx.createLinearGradient(0, 0, W * 0.5, H);
-      bg.addColorStop(0, '#050010');
-      bg.addColorStop(0.4, '#080020');
-      bg.addColorStop(0.7, '#060015');
-      bg.addColorStop(1, '#020008');
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, W, H);
+    let reqId: number;
+    function frame() {
+      if (!canvas || !gl) return;
+      const t = now();
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1f(uTime, t);
 
-      // PERSPECTIVE GRID at bottom
-      ctx.save();
-      ctx.globalAlpha = 0.18;
-      const horizon = H * 0.74;
-      const gc = 22, gr = 12;
-      for (let c = 0; c <= gc; c++) {
-        const x = (c / gc) * W;
-        const alpha = 0.7 - Math.abs(c / gc - 0.5) * 1.2;
-        ctx.strokeStyle = `rgba(108,99,255,${Math.max(0, alpha)})`;
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(W / 2 + (x - W / 2) * 0.04, horizon);
-        ctx.lineTo(x, H + 60);
-        ctx.stroke();
-      }
-      for (let r = 0; r <= gr; r++) {
-        const t = r / gr;
-        const y = horizon + (H - horizon + 60) * (t * t);
-        ctx.strokeStyle = `rgba(108,99,255,${0.55 - t * 0.45})`;
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      }
-      ctx.restore();
-
-      // TWINKLING STARS
-      stars.forEach(s => {
-        const a = s.alpha * (0.5 + 0.5 * Math.sin(time * s.speed * 60 + s.offset));
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${a})`;
-        ctx.fill();
-      });
-
-      // SHOOTING STARS
-      if (Math.random() < 0.005) spawnShooter();
-      for (let i = shooters.length - 1; i >= 0; i--) {
-        const ss = shooters[i];
-        if (!ss.active) { shooters.splice(i, 1); continue; }
-        const g = ctx.createLinearGradient(ss.x, ss.y, ss.x - ss.len, ss.y + ss.len * 0.35);
-        g.addColorStop(0, `rgba(255,255,255,${ss.alpha})`);
-        g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.strokeStyle = g;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(ss.x, ss.y);
-        ctx.lineTo(ss.x - ss.len, ss.y + ss.len * 0.35);
-        ctx.stroke();
-        ss.x += ss.speed * 1.2; ss.y += ss.speed * 0.4;
-        ss.alpha -= 0.013;
-        if (ss.alpha <= 0 || ss.x > W + 150) ss.active = false;
-      }
-
-      // GLOWING ORBS
-      orbs.forEach((orb, i) => {
-        const px = (mouseX / W - 0.5) * 50 * orb.depth;
-        const py = (mouseY / H - 0.5) * 35 * orb.depth;
-        orb.x = orb.baseX + px + Math.sin(time * orb.floatSpeed + orb.floatOff) * orb.floatAmp;
-        orb.y = orb.baseY + py + Math.cos(time * orb.floatSpeed * 0.7 + orb.floatOff) * orb.floatAmp * 0.6;
-        orb.baseX += orb.vx; orb.baseY += orb.vy;
-        if (orb.baseX < -250) orb.baseX = W + 250;
-        if (orb.baseX > W + 250) orb.baseX = -250;
-        if (orb.baseY < -250) orb.baseY = H + 250;
-        if (orb.baseY > H + 250) orb.baseY = -250;
-
-        const pulse = 0.5 + 0.5 * Math.sin(time * 0.9 + orb.pulseOff + i * 0.5);
-        const alpha = (0.12 + 0.08 * orb.depth) * (0.7 + 0.3 * pulse);
-        const glowR = orb.radius * (2.0 + 0.5 * pulse);
-        const { r, g, b } = orb.col;
-
-        const grad = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, glowR);
-        grad.addColorStop(0, `rgba(${r},${g},${b},${alpha * 3.5})`);
-        grad.addColorStop(0.25, `rgba(${r},${g},${b},${alpha * 2})`);
-        grad.addColorStop(0.6, `rgba(${r},${g},${b},${alpha * 0.8})`);
-        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(orb.x, orb.y, glowR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // bright core
-        const core = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.radius * 0.35);
-        core.addColorStop(0, `rgba(255,255,255,${0.25 * orb.depth * pulse})`);
-        core.addColorStop(1, `rgba(${r},${g},${b},0)`);
-        ctx.fillStyle = core;
-        ctx.beginPath();
-        ctx.arc(orb.x, orb.y, orb.radius * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // 3D RINGS
-      rings.forEach(ring => {
-        ring.rot += ring.rotSpeed;
-        ring.tilt += ring.tiltSpeed;
-        const ry = Math.abs(Math.sin(ring.tilt)) * ring.rx * 0.45;
-        const { r, g, b } = ring.col;
-
-        ctx.save();
-        ctx.translate(ring.cx, ring.cy);
-        ctx.rotate(ring.rot);
-        ctx.scale(1, ry / ring.rx);
-
-        ctx.beginPath();
-        ctx.ellipse(0, 0, ring.rx, ring.rx, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${r},${g},${b},${ring.alpha})`;
-        ctx.lineWidth = ring.lw;
-        ctx.shadowColor = `rgba(${r},${g},${b},0.5)`;
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        ctx.restore();
-      });
-
-      // PARTICLE NETWORK
-      const CDIST = 140;
-      nodes.forEach(n => {
-        n.x += n.vx; n.y += n.vy;
-        if (n.x < 0 || n.x > W) n.vx *= -1;
-        if (n.y < 0 || n.y > H) n.vy *= -1;
-      });
-
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < CDIST) {
-            const a = (1 - dist / CDIST) * 0.3;
-            ctx.strokeStyle = `rgba(108,99,255,${a})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.stroke();
-          }
+      /* upload drops — only active ones count */
+      let nActive = 0;
+      for(let i=0; i<MAX_DROPS; i++){
+        const d = drops[i];
+        const age = t - d.t;
+        if(age >= 0 && age < 3.5){
+          gl.uniform4f(uDrops[nActive], d.x, d.y, d.t, 0.0);
+          nActive++;
         }
       }
+      gl.uniform1i(uNdrop, nActive);
 
-      nodes.forEach(n => {
-        // glow
-        const ng = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 5);
-        ng.addColorStop(0, 'rgba(108,99,255,0.4)');
-        ng.addColorStop(1, 'rgba(108,99,255,0)');
-        ctx.fillStyle = ng;
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r * 5, 0, Math.PI * 2);
-        ctx.fill();
-        // dot
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(180,170,255,0.9)';
-        ctx.fill();
-      });
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      reqId = requestAnimationFrame(frame);
+    }
+    
+    // Start animation loop
+    reqId = requestAnimationFrame(frame);
 
-      // MOUSE AURA
-      const aura = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 220);
-      aura.addColorStop(0, 'rgba(108,99,255,0.1)');
-      aura.addColorStop(0.4, 'rgba(0,198,255,0.04)');
-      aura.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = aura;
-      ctx.beginPath();
-      ctx.arc(mouseX, mouseY, 220, 0, Math.PI * 2);
-      ctx.fill();
-
-      // VIGNETTE
-      const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.95);
-      vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, 'rgba(0,0,10,0.65)');
-      ctx.fillStyle = vig;
-      ctx.fillRect(0, 0, W, H);
-
-      animId = requestAnimationFrame(draw);
-    };
-
-    draw();
-
+    // CLEANUP FUNCTION
     return () => {
-      cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(reqId);
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('touchmove', handleTouchMove as any);
+      window.removeEventListener('touchstart', handleTouchStart as any);
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0, left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 0,
-        display: 'block',
-        pointerEvents: 'none',
-      }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 0, 
+          display: 'block',
+          cursor: 'none'
+        }}
+      />
+      <div
+        ref={cursorRef}
+        id="cur"
+        style={{
+          position: 'fixed',
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: 'rgba(0,229,255,0.7)',
+          boxShadow: '0 0 18px 4px rgba(0,229,255,0.5)',
+          pointerEvents: 'none',
+          zIndex: 9999,
+          transform: 'translate(-50%,-50%)',
+          transition: 'transform 0.05s',
+          mixBlendMode: 'screen'
+        }}
+      />
+    </>
   );
 }
