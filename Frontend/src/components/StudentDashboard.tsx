@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ProgressBarLoader } from './LoadingScreens';
 
 interface Props { 
   onLogout: () => void; 
@@ -59,12 +60,15 @@ export default function StudentDashboard({ onLogout, user }: Props) {
   const [registered, setRegistered] = useState<number[]>([]);
   const [loadingReg, setLoadingReg] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
+  const [dashLoading, setDashLoading] = useState(true);
 
   useEffect(() => {
+    setDashLoading(true);
     fetch('http://localhost:5000/api/events')
       .then(res => res.json())
       .then(data => setEvents(data.filter((e: any) => e.status === 'Active')))
-      .catch(err => console.error('Failed to load events', err));
+      .catch(err => console.error('Failed to load events', err))
+      .finally(() => setDashLoading(false));
   }, []);
 
   useEffect(() => {
@@ -121,6 +125,14 @@ export default function StudentDashboard({ onLogout, user }: Props) {
       setLoadingReg(false);
     }
   };
+
+  if (dashLoading) {
+    return (
+      <div style={g.page}>
+        <ProgressBarLoader message="Loading your dashboard..." />
+      </div>
+    );
+  }
 
   return (
     <div style={g.page}>
@@ -240,7 +252,7 @@ export default function StudentDashboard({ onLogout, user }: Props) {
               </div>
               <div style={g.grid3}>
                 {filtered.map(ev => {
-                  const pct = Math.round((ev.filled / ev.seats) * 100);
+                  const pct = ev.seats > 0 ? Math.round((ev.filled / ev.seats) * 100) : 0;
                   const isReg = registered.includes(ev.id);
                   return (
                     <div key={ev.id} style={{ background: 'rgba(10,5,30,0.6)', backdropFilter: 'blur(16px)', border: `1px solid ${ev.color}25`, borderRadius: 18, padding: 22, transition: 'all 0.3s' }}>

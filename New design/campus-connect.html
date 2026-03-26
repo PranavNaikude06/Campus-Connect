@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Campus Connect — Terna Engineering College</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#03050d;--cyan:#00e5ff;--gold:#ffab00;--text:#dff0fc;--muted:#556e85;--gb:rgba(255,255,255,0.07)}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;min-height:100vh}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;cursor:none}
+.page{position:relative;z-index:2}
+
+/* cursor glow */
+#cur{position:fixed;width:18px;height:18px;border-radius:50%;background:rgba(0,229,255,0.7);box-shadow:0 0 18px 4px rgba(0,229,255,0.5);pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform 0.05s;mix-blend-mode:screen}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 3rem;background:rgba(3,5,13,0.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,229,255,0.07);position:sticky;top:0;z-index:200}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;display:flex;align-items:center;gap:10px;letter-spacing:-0.5px}
+.logo svg{width:26px;height:26px;display:block}
+.logo span{color:var(--cyan)}
+.nav-links{display:flex;gap:2.2rem;list-style:none}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:0.86rem;font-weight:500;transition:color 0.2s}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{font-family:'DM Sans',sans-serif;font-weight:500;font-size:0.84rem;background:var(--cyan);color:#03050d;border:none;padding:0.5rem 1.3rem;border-radius:6px;cursor:none;transition:all 0.2s}
+.nav-cta:hover{filter:brightness(1.12);box-shadow:0 0 24px rgba(0,229,255,0.3)}
+
+.hero{min-height:95vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:5rem 2rem 3rem}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(0,229,255,0.18);background:rgba(0,229,255,0.05);color:var(--cyan);font-size:0.72rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;padding:0.38rem 1rem;border-radius:100px;margin-bottom:2rem;animation:up 0.9s ease both}
+.htdot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}
+h1{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(3.2rem,7vw,6rem);line-height:0.96;letter-spacing:-4px;max-width:860px;animation:up 0.9s 0.1s ease both}
+h1 .outline{color:transparent;-webkit-text-stroke:1.5px rgba(0,229,255,0.55)}
+h1 .glow{color:var(--cyan);text-shadow:0 0 80px rgba(0,229,255,0.4)}
+.hero-p{font-size:1.05rem;color:var(--muted);max-width:480px;line-height:1.8;margin:1.8rem 0 2.8rem;font-weight:300;animation:up 0.9s 0.2s ease both}
+.hero-btns{display:flex;gap:0.9rem;flex-wrap:wrap;justify-content:center;animation:up 0.9s 0.3s ease both}
+.bp{background:var(--cyan);color:#03050d;border:none;padding:0.85rem 2rem;border-radius:8px;font-family:'DM Sans',sans-serif;font-weight:500;font-size:0.92rem;cursor:none;transition:all 0.25s}
+.bp:hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 16px 48px rgba(0,229,255,0.25)}
+.bg2{background:transparent;color:var(--text);border:1px solid var(--gb);padding:0.85rem 2rem;border-radius:8px;font-family:'DM Sans',sans-serif;font-weight:400;font-size:0.92rem;cursor:none;transition:all 0.25s}
+.bg2:hover{background:rgba(255,255,255,0.05);transform:translateY(-2px)}
+.stats{display:flex;margin-top:4rem;border:1px solid var(--gb);border-radius:12px;overflow:hidden;background:rgba(3,5,13,0.55);backdrop-filter:blur(16px);animation:up 0.9s 0.45s ease both}
+.stat{padding:1.2rem 2.4rem;text-align:center;border-right:1px solid var(--gb);flex:1;min-width:130px}
+.stat:last-child{border-right:none}
+.sn{font-family:'Syne',sans-serif;font-size:1.75rem;font-weight:800;color:var(--cyan);line-height:1}
+.sl{font-size:0.72rem;color:var(--muted);margin-top:4px;letter-spacing:0.8px;text-transform:uppercase}
+.dv{height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,255,0.1) 30%,rgba(0,229,255,0.1) 70%,transparent);margin:0 4rem}
+
+.sec{padding:7rem 2rem;max-width:1100px;margin:0 auto}
+.lbl{font-size:0.7rem;color:var(--cyan);letter-spacing:3px;text-transform:uppercase;font-weight:500;margin-bottom:0.75rem}
+.sh{font-family:'Syne',sans-serif;font-size:clamp(2.2rem,4vw,3.2rem);font-weight:800;letter-spacing:-2px;line-height:1.05;margin-bottom:0.75rem}
+.sp2{color:var(--muted);font-size:0.95rem;max-width:440px;line-height:1.75;margin-bottom:3.5rem}
+.rg{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.08);border-radius:16px;overflow:hidden}
+.rc{background:var(--bg);padding:2.2rem 2rem;position:relative;overflow:hidden;transition:background 0.35s}
+.rc-shine{position:absolute;top:-80px;right:-80px;width:200px;height:200px;border-radius:50%;opacity:0;transition:opacity 0.5s;pointer-events:none}
+.rc.s .rc-shine{background:radial-gradient(circle,rgba(0,229,255,0.08),transparent 70%)}
+.rc.o .rc-shine{background:radial-gradient(circle,rgba(255,171,0,0.08),transparent 70%)}
+.rc.a .rc-shine{background:radial-gradient(circle,rgba(123,47,247,0.1),transparent 70%)}
+.rc:hover .rc-shine{opacity:1}
+.rc:hover{background:#060d1a}
+.rc-num{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;color:rgba(255,255,255,0.04);line-height:1;position:absolute;top:1.5rem;right:1.8rem;letter-spacing:-2px}
+.ri{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:1.2rem;position:relative;z-index:1}
+.s .ri{background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.14)}
+.o .ri{background:rgba(255,171,0,0.08);border:1px solid rgba(255,171,0,0.14)}
+.a .ri{background:rgba(123,47,247,0.09);border:1px solid rgba(123,47,247,0.16)}
+.rt{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:0.3rem;position:relative;z-index:1}
+.rb{display:inline-block;font-size:0.62rem;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;padding:2px 8px;border-radius:100px;margin-bottom:1rem;position:relative;z-index:1}
+.s .rb{background:rgba(0,229,255,0.09);color:var(--cyan)}
+.o .rb{background:rgba(255,171,0,0.09);color:var(--gold)}
+.a .rb{background:rgba(123,47,247,0.1);color:#b49dff}
+.rd{color:var(--muted);font-size:0.84rem;line-height:1.7;margin-bottom:1.4rem;position:relative;z-index:1}
+.fl{list-style:none;display:flex;flex-direction:column;gap:0.5rem;position:relative;z-index:1}
+.fl li{font-size:0.81rem;color:rgba(223,240,252,0.6);display:flex;align-items:center;gap:8px}
+.fl li::before{content:'';width:4px;height:4px;border-radius:50%;flex-shrink:0}
+.s .fl li::before{background:var(--cyan)}
+.o .fl li::before{background:var(--gold)}
+.a .fl li::before{background:#a78bfa}
+
+.flow-wrap{border-top:1px solid var(--gb);border-bottom:1px solid var(--gb);background:rgba(0,0,0,0.25);padding:7rem 2rem}
+.flow-inner{max-width:1100px;margin:0 auto}
+.flow-track{display:flex;align-items:flex-start;margin-top:3.5rem;position:relative}
+.flow-track::before{content:'';position:absolute;top:18px;left:2%;right:2%;height:1px;background:linear-gradient(90deg,transparent,var(--gb) 10%,var(--gb) 90%,transparent)}
+.fs{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 0.8rem}
+.fs-node{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,229,255,0.15);background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:700;color:var(--muted);position:relative;z-index:1;margin-bottom:1.2rem;transition:all 0.3s}
+.fs:hover .fs-node{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 0 4px rgba(0,229,255,0.06),0 0 20px rgba(0,229,255,0.2)}
+.fs-title{font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;margin-bottom:0.4rem}
+.fs-desc{font-size:0.78rem;color:var(--muted);line-height:1.6}
+
+.tech-grid{display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:2.5rem}
+.tp{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.025);border:1px solid var(--gb);border-radius:7px;padding:0.52rem 1rem;font-size:0.8rem;font-weight:400;transition:all 0.2s}
+.tp:hover{background:rgba(255,255,255,0.055);transform:translateY(-2px);border-color:rgba(255,255,255,0.12)}
+.tdot{width:6px;height:6px;border-radius:50%}
+.tf .tdot{background:#00e5ff}.tb .tdot{background:#00e676}.tdb .tdot{background:#ffab00}.tsv .tdot{background:#b39ddb}
+
+.cta{padding:9rem 2rem;text-align:center}
+.cta h2{font-family:'Syne',sans-serif;font-size:clamp(2.5rem,5.5vw,4.5rem);font-weight:800;letter-spacing:-3px;line-height:1;margin-bottom:1rem}
+.cta h2 em{font-style:normal;color:var(--cyan)}
+.cta p{color:var(--muted);font-size:0.98rem;margin-bottom:2.8rem;line-height:1.75}
+
+footer{border-top:1px solid var(--gb);padding:1.8rem 3rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.flogo{font-family:'Syne',sans-serif;font-weight:700;font-size:0.92rem;display:flex;align-items:center;gap:6px}
+.flogo span{color:var(--cyan)}
+footer p{color:var(--muted);font-size:0.76rem}
+.flinks{display:flex;gap:1.5rem;list-style:none}
+.flinks a{color:var(--muted);text-decoration:none;font-size:0.76rem;transition:color 0.2s}
+.flinks a:hover{color:var(--text)}
+
+@keyframes up{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+.reveal{opacity:0;transform:translateY(32px);transition:all 0.85s cubic-bezier(0.16,1,0.3,1)}
+.reveal.visible{opacity:1;transform:none}
+@media(max-width:900px){.rg{grid-template-columns:1fr}.flow-track{flex-wrap:wrap;gap:2rem}.flow-track::before{display:none}}
+@media(max-width:720px){nav{padding:1rem 1.2rem}.nav-links{display:none}footer{flex-direction:column;text-align:center;padding:1.5rem}h1{letter-spacing:-2px}.stats{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cur"></div>
+
+<div class="page">
+<nav>
+  <div class="logo">
+    <svg viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="11" stroke="#00e5ff" stroke-width="1.2" opacity="0.6"/><circle cx="13" cy="13" r="4.5" fill="#00e5ff" opacity="0.9"/><circle cx="13" cy="13" r="1.8" fill="#03050d"/></svg>
+    Campus<span>Connect</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#roles">Roles</a></li><li><a href="#flow">Workflow</a></li><li><a href="#tech">Stack</a></li>
+  </ul>
+  <button class="nav-cta">Get Started →</button>
+</nav>
+
+<section class="hero">
+  <div class="hero-tag"><span class="htdot"></span>Terna Engineering College · Mumbai</div>
+  <h1><span class="outline">Campus</span><br/><span style="color:var(--text)">Events </span><span class="glow">Reimagined</span></h1>
+  <p class="hero-p">One centralized portal to discover, register, and manage every college event — for students, clubs, and administrators.</p>
+  <div class="hero-btns">
+    <button class="bp">Student Login</button>
+    <button class="bg2">Organizer Access</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="sn">3</div><div class="sl">User Roles</div></div>
+    <div class="stat"><div class="sn">Live</div><div class="sl">Seat Tracking</div></div>
+    <div class="stat"><div class="sn">CSV</div><div class="sl">Data Export</div></div>
+    <div class="stat"><div class="sn">Auto</div><div class="sl">Email Confirm</div></div>
+  </div>
+</section>
+<div class="dv"></div>
+
+<section class="sec reveal" id="roles">
+  <div class="lbl">Role-Based Access</div>
+  <h2 class="sh">One Platform,<br/>Three Experiences</h2>
+  <p class="sp2">Each role gets a purpose-built dashboard. No clutter, no feature bleed — just what you need.</p>
+  <div class="rg">
+    <div class="rc s"><div class="rc-shine"></div><div class="rc-num">01</div>
+      <div class="ri">🎓</div><div class="rt">Student</div><div class="rb">Self-Service</div>
+      <p class="rd">Browse active events, claim your seat instantly, and get a confirmation — all in under a minute.</p>
+      <ul class="fl"><li>Signup with TUF ID + email</li><li>1-click event registration</li><li>Brevo email confirmation</li><li>History & mock certificates</li></ul>
+    </div>
+    <div class="rc o"><div class="rc-shine"></div><div class="rc-num">02</div>
+      <div class="ri">📋</div><div class="rt">Organizer</div><div class="rb">Committee / Club</div>
+      <p class="rd">Draft events for GDSC, CSI, or any committee. Track seats live. Export your attendee list instantly.</p>
+      <ul class="fl"><li>Admin-provisioned credentials</li><li>Create & submit events</li><li>Real-time seat tracking</li><li>Download full attendee CSV</li></ul>
+    </div>
+    <div class="rc a"><div class="rc-shine"></div><div class="rc-num">03</div>
+      <div class="ri">🛡️</div><div class="rt">System Admin</div><div class="rb">Master Access</div>
+      <p class="rd">Approve events before they go live. Manage credentials and monitor every user on the platform.</p>
+      <ul class="fl"><li>Approve / reject event queue</li><li>Issue & revoke org credentials</li><li>Monitor all users & clubs</li><li>Global analytics dashboard</li></ul>
+    </div>
+  </div>
+</section>
+
+<div class="flow-wrap reveal" id="flow">
+  <div class="flow-inner">
+    <div class="lbl">Event Lifecycle</div>
+    <h2 class="sh">From Draft to Done</h2>
+    <p class="sp2">Every event passes a quality-controlled pipeline before any student sees it.</p>
+    <div class="flow-track">
+      <div class="fs"><div class="fs-node">01</div><div class="fs-title">Organizer Drafts</div><p class="fs-desc">Club submits event. Status auto-locked to Pending.</p></div>
+      <div class="fs"><div class="fs-node">02</div><div class="fs-title">Admin Reviews</div><p class="fs-desc">Admin approves or rejects before it goes live.</p></div>
+      <div class="fs"><div class="fs-node">03</div><div class="fs-title">Goes Live</div><p class="fs-desc">Appears on Student Dashboard with live seat count.</p></div>
+      <div class="fs"><div class="fs-node">04</div><div class="fs-title">Students Register</div><p class="fs-desc">DB unique constraint + Brevo confirmation fires.</p></div>
+      <div class="fs"><div class="fs-node">05</div><div class="fs-title">Export & Close</div><p class="fs-desc">Organizer downloads full attendee CSV for event day.</p></div>
+    </div>
+  </div>
+</div>
+
+<section class="sec reveal" id="tech">
+  <div class="lbl">Tech Stack</div>
+  <h2 class="sh">Built to Scale</h2>
+  <p class="sp2">Decoupled React frontend talking to an Express REST API backed by a live MySQL database.</p>
+  <div class="tech-grid">
+    <span class="tp tf"><span class="tdot"></span>React 19 + Vite</span>
+    <span class="tp tf"><span class="tdot"></span>TypeScript</span>
+    <span class="tp tf"><span class="tdot"></span>TailwindCSS v4</span>
+    <span class="tp tf"><span class="tdot"></span>Framer Motion</span>
+    <span class="tp tf"><span class="tdot"></span>Lucide React</span>
+    <span class="tp tb"><span class="tdot"></span>Node.js + Express</span>
+    <span class="tp tb"><span class="tdot"></span>REST API</span>
+    <span class="tp tb"><span class="tdot"></span>bcryptjs</span>
+    <span class="tp tdb"><span class="tdot"></span>MySQL</span>
+    <span class="tp tdb"><span class="tdot"></span>mysql2/promise</span>
+    <span class="tp tdb"><span class="tdot"></span>Connection Pool</span>
+    <span class="tp tsv"><span class="tdot"></span>Brevo Email API</span>
+  </div>
+</section>
+
+<section class="cta reveal">
+  <div class="lbl">Ready?</div>
+  <h2><em>Campus.</em><br/>Connected.</h2>
+  <p>Join Terna Engineering College's event platform.<br/>Find events, register instantly, never miss what matters.</p>
+  <div class="hero-btns"><button class="bp">Create Account</button><button class="bg2">Browse Events</button></div>
+</section>
+
+<footer>
+  <div class="flogo">Campus<span>Connect</span></div>
+  <p>© 2025 Terna Engineering College · All rights reserved</p>
+  <ul class="flinks"><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li><li><a href="#">Contact</a></li></ul>
+</footer>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   Single-pass WebGL — aurora BG + analytic water ripples
+   Mouse trail stored as uniform array → 100% compatible
+═══════════════════════════════════════════════════ */
+(function(){
+  const canvas = document.getElementById('c');
+  const gl = canvas.getContext('webgl', {antialias:false})
+           || canvas.getContext('experimental-webgl', {antialias:false});
+  if(!gl){ canvas.style.background='#03050d'; return; }
+
+  const MAX_DROPS = 32; /* max concurrent ripple sources */
+
+  const VS = `
+    attribute vec2 a_pos;
+    varying   vec2 v_uv;
+    void main(){
+      v_uv = a_pos * 0.5 + 0.5;
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+    }
+  `;
+
+  const FS = `
+    precision highp float;
+    #define MAX_DROPS 32
+
+    uniform vec2  u_res;
+    uniform float u_time;
+
+    /* each drop: xy=position(0-1), z=birth_time, w=unused */
+    uniform vec4 u_drops[MAX_DROPS];
+    uniform int  u_ndrop;
+
+    varying vec2 v_uv;
+
+    /* ── noise / fbm for aurora ── */
+    vec2 hash2(vec2 p){
+      p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+      return -1.0 + 2.0*fract(sin(p)*43758.5453);
+    }
+    float noise(vec2 p){
+      vec2 i=floor(p), f=fract(p), u=f*f*(3.0-2.0*f);
+      return mix(mix(dot(hash2(i),f), dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),
+                 mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)), dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);
+    }
+    float fbm(vec2 p){
+      float v=0.0, a=0.5;
+      mat2 m = mat2(1.6,1.2,-1.2,1.6);
+      for(int i=0;i<5;i++){ v+=a*noise(p); p=m*p; a*=0.5; }
+      return v;
+    }
+
+    /* ── single ripple height at uv from one drop ── */
+    float ripple(vec2 uv, vec2 src, float age){
+      /* aspect-correct distance */
+      vec2 asp = vec2(u_res.x/u_res.y, 1.0);
+      float d = length((uv - src) * asp);
+
+      float speed     = 0.55;         /* how fast ring expands      */
+      float freq      = 28.0;         /* ring tightness             */
+      float lifetime  = 3.2;          /* seconds until gone         */
+      float waveR     = age * speed;  /* radius of leading edge     */
+      float decay     = exp(-age * 1.8) * smoothstep(0.0, 0.06, waveR);
+
+      /* ring: only visible near the expanding wavefront */
+      float ring = exp(-pow((d - waveR)*freq, 2.0));
+
+      /* surface displacement */
+      return sin(d * freq - age * 14.0) * ring * decay * 0.032;
+    }
+
+    void main(){
+      float t = u_time;
+
+      /* ── sum all ripple displacements ── */
+      float h  = 0.0;
+      float hx = 0.0;  /* h(uv + eps_x) for normal */
+      float hy = 0.0;
+      float eps = 0.003;
+
+      for(int i = 0; i < MAX_DROPS; i++){
+        if(i >= u_ndrop) break;
+        vec2  pos = u_drops[i].xy;
+        float age = t - u_drops[i].z;
+        if(age < 0.0 || age > 3.5) continue;
+        h  += ripple(v_uv,             pos, age);
+        hx += ripple(v_uv+vec2(eps,0), pos, age);
+        hy += ripple(v_uv+vec2(0,eps), pos, age);
+      }
+
+      /* surface normal → refraction offset */
+      vec2 norm = vec2(hx - h, hy - h) / eps;
+      vec2 refUV = v_uv + norm * 1.4;  /* bump up for stronger bending */
+
+      /* ── aurora on refractedUV ── */
+      vec2 uv2 = (refUV - 0.5) * vec2(u_res.x/u_res.y, 1.0);
+      float s = t * 0.14;
+      vec2 q  = vec2(fbm(uv2 + s*0.5), fbm(uv2 + vec2(5.2,1.3) + s*0.4));
+      vec2 r  = vec2(fbm(uv2 + 2.0*q + vec2(1.7,9.2) + s*0.3),
+                     fbm(uv2 + 2.0*q + vec2(8.3,2.8) + s*0.25));
+      float f = fbm(uv2 + 2.5*r + s*0.2);
+      f = smoothstep(-0.05, 1.05, f);
+
+      vec3 col = mix(vec3(0.010,0.018,0.055), vec3(0.06,0.01,0.22), f);
+      col = mix(col, vec3(0.12,0.03,0.58),   pow(f,1.8)*0.72);
+      col = mix(col, vec3(0.0,0.82,0.98),    pow(max(f-0.52,0.0)*2.2, 2.2)*0.60);
+      col = mix(col, vec3(1.0,0.67,0.0),     pow(max(f-0.80,0.0)*5.0, 3.0)*0.28);
+
+      /* ── specular highlight on wave crests ── */
+      float spec = pow(max(dot(normalize(vec3(norm, 0.5)), normalize(vec3(0.3,0.4,1.0))),0.0), 22.0);
+      col += vec3(0.5,0.95,1.0) * spec * 0.6;
+
+      /* ── crest shimmer ── */
+      col += vec3(0.0, 0.7, 1.0) * smoothstep(0.004, 0.018, abs(h)) * 0.4;
+
+      /* ── vignette ── */
+      float vig = v_uv.x * v_uv.y * (1.0-v_uv.x) * (1.0-v_uv.y);
+      col *= pow(clamp(vig * 16.0, 0.0, 1.0), 0.18) * 0.82;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function compileShader(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compileShader(gl.VERTEX_SHADER,   VS));
+  gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog); gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uRes   = gl.getUniformLocation(prog, 'u_res');
+  const uTime  = gl.getUniformLocation(prog, 'u_time');
+  const uNdrop = gl.getUniformLocation(prog, 'u_ndrop');
+  /* pre-fetch all drop uniform locations */
+  const uDrops = [];
+  for(let i=0; i<MAX_DROPS; i++) uDrops.push(gl.getUniformLocation(prog, `u_drops[${i}]`));
+
+  function resize(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0,0,canvas.width,canvas.height);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  /* ── drop ring buffer ── */
+  /* Each drop: {x, y, birthTime}  — circular buffer size MAX_DROPS */
+  const drops = new Array(MAX_DROPS).fill(null).map(()=>({x:0,y:0,t:-999}));
+  let   dropHead = 0;
+  const start = performance.now();
+
+  function now(){ return (performance.now()-start)*0.001; }
+
+  function addDrop(px, py){
+    drops[dropHead] = { x: px/window.innerWidth, y: 1.0 - py/window.innerHeight, t: now() };
+    dropHead = (dropHead+1) % MAX_DROPS;
+  }
+
+  /* throttle drops while dragging so we don't flood the buffer */
+  let lastDrop = 0;
+  function onMove(px, py){
+    const n = now();
+    if(n - lastDrop > 0.055){ /* ~18 drops/sec max */
+      addDrop(px, py);
+      lastDrop = n;
+    }
+  }
+
+  window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  window.addEventListener('click',     e => addDrop(e.clientX, e.clientY));
+  window.addEventListener('touchmove', e => {
+    e.preventDefault();
+    onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive:false});
+  window.addEventListener('touchstart', e => addDrop(e.touches[0].clientX, e.touches[0].clientY), {passive:true});
+
+  /* custom cursor */
+  const cur = document.getElementById('cur');
+  window.addEventListener('mousemove', e=>{
+    cur.style.left = e.clientX+'px';
+    cur.style.top  = e.clientY+'px';
+  });
+
+  function frame(){
+    const t = now();
+    gl.uniform2f(uRes,  canvas.width, canvas.height);
+    gl.uniform1f(uTime, t);
+
+    /* upload drops — only active ones count */
+    let nActive = 0;
+    for(let i=0; i<MAX_DROPS; i++){
+      const d = drops[i];
+      const age = t - d.t;
+      if(age >= 0 && age < 3.5){
+        gl.uniform4f(uDrops[nActive], d.x, d.y, d.t, 0.0);
+        nActive++;
+      }
+    }
+    gl.uniform1i(uNdrop, nActive);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* scroll reveal */
+const obs = new IntersectionObserver(
+  e=>e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')}),{threshold:0.07}
+);
+document.querySelectorAll('.reveal').forEach(r=>obs.observe(r));
+</script>
+</body>
+</html>

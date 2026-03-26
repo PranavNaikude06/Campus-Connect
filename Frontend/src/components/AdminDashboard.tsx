@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ProgressBarLoader } from './LoadingScreens';
 
 interface Props { onLogout: () => void; }
 
@@ -50,20 +51,15 @@ export default function AdminDashboard({ onLogout }: Props) {
   const [credLoading, setCredLoading] = useState(false);
   const [credError, setCredError] = useState('');
   const [credSuccess, setCredSuccess] = useState('');
+  const [dashLoading, setDashLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/events')
-      .then(r => r.json())
-      .then(setEvents)
-      .catch(console.error);
-    fetch('http://localhost:5000/api/admin/users')
-      .then(r => r.json())
-      .then(setUsers)
-      .catch(console.error);
-    fetch('http://localhost:5000/api/admin/alerts')
-      .then(r => r.json())
-      .then(setAlerts)
-      .catch(console.error);
+    setDashLoading(true);
+    Promise.all([
+      fetch('http://localhost:5000/api/events').then(r => r.json()).then(setEvents).catch(console.error),
+      fetch('http://localhost:5000/api/admin/users').then(r => r.json()).then(setUsers).catch(console.error),
+      fetch('http://localhost:5000/api/admin/alerts').then(r => r.json()).then(setAlerts).catch(console.error),
+    ]).finally(() => setDashLoading(false));
   }, []);
 
   useEffect(() => {
@@ -123,6 +119,14 @@ export default function AdminDashboard({ onLogout }: Props) {
     u.branch?.toLowerCase().includes(search.toLowerCase()) ||
     u.year?.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (dashLoading) {
+    return (
+      <div style={g.page}>
+        <ProgressBarLoader message="Loading admin dashboard..." />
+      </div>
+    );
+  }
 
   return (
     <div style={g.page}>
@@ -204,7 +208,7 @@ export default function AdminDashboard({ onLogout }: Props) {
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#f0f4ff', marginBottom: 20 }}>📊 Event Fill Rates</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {events.slice(0, 4).map(ev => {
-                      const pct = Math.round((ev.filled / ev.seats) * 100);
+                      const pct = ev.seats > 0 ? Math.round((ev.filled / ev.seats) * 100) : 0;
                       return (
                         <div key={ev.id}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
