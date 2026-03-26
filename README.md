@@ -1,7 +1,6 @@
 
 # Campus Connect - Project Overview
 
-> **Author Note for AI Agents**: If you are reading this document, you are being onboarded into the "Campus Connect" repository. Please read this overview carefully to understand the stack, schema, and current state of the application before editing files.
 
 ## 1. Introduction
 **Campus Connect** is a comprehensive, centralized web-based portal developed for Terna Engineering College. It provides seamless event registration, event management, and real-time tracking for the college ecosystem spanning across students, event organizers (e.g., student committees, clubs), and administrative staff.
