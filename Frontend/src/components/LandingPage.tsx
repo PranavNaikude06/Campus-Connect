@@ -103,6 +103,10 @@ export default function LandingPage({ onLogin }: Props) {
   const [regData, setRegData] = useState({ name: '', email: '', className: '', division: '', year: '', mobile_no: '', tuf_id: '' });
   const [regStatus, setRegStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [regError, setRegError] = useState('');
+  const [paymentSS, setPaymentSS] = useState<string | null>(null);
+  const [paymentSSName, setPaymentSSName] = useState('');
+  const [teamName, setTeamName] = useState('');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   // Student Auth State
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'reset'>('login');
@@ -215,17 +219,47 @@ export default function LandingPage({ onLogin }: Props) {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (registerEvent?.is_paid && !paymentSS) {
+      setRegStatus('error');
+      setRegError('Please upload your payment screenshot before submitting.');
+      return;
+    }
+    
+    if (registerEvent?.team_size_max > 1) {
+      if (!teamName.trim()) { setRegStatus('error'); setRegError('Team Name is required for group events.'); return; }
+      if (teamMembers.length + 1 < registerEvent.team_size_min || teamMembers.length + 1 > registerEvent.team_size_max) {
+        setRegStatus('error'); setRegError(`Your team must have between ${registerEvent.team_size_min} and ${registerEvent.team_size_max} members.`); return;
+      }
+      for (const m of teamMembers) {
+        if (!m.name || !m.email || !m.tuf_id) { setRegStatus('error'); setRegError('Please fill all details for every member.'); return; }
+      }
+    }
+
     setRegStatus('loading');
     setRegError('');
     try {
       const res = await fetch('http://localhost:5000/api/students/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: registerEvent?.id, ...regData })
+        body: JSON.stringify({
+          eventId: registerEvent?.id,
+          ...regData,
+          payment_ss: paymentSS || null,
+          team_name: registerEvent?.team_size_max > 1 ? teamName : null,
+          team_members: registerEvent?.team_size_max > 1 ? teamMembers : null,
+        })
       });
       if (res.ok) {
         setRegStatus('success');
-        setTimeout(() => { setRegisterEvent(null); setRegStatus('idle'); setRegData({ name: '', email: '', className: '', division: '', year: '', mobile_no: '', tuf_id: '' }); }, 2000);
+        setTimeout(() => {
+          setRegisterEvent(null);
+          setRegStatus('idle');
+          setRegData({ name: '', email: '', className: '', division: '', year: '', mobile_no: '', tuf_id: '' });
+          setPaymentSS(null);
+          setPaymentSSName('');
+          setTeamName('');
+          setTeamMembers([]);
+        }, 2000);
       } else {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Connection error failed to register. Try again.');
@@ -285,70 +319,33 @@ export default function LandingPage({ onLogin }: Props) {
             <p className="sp2" style={{ margin: '0 auto' }}>Three roles, one platform — pick yours and get started instantly.</p>
           </div>
           <div className="rg">
-            <div className="rc s" onClick={() => handleRoleClick('student')}><div className="rc-shine"></div><div className="rc-num">01</div>
-              <div className="ri">🎓</div><div className="rt">Student Login</div><div className="rb">Self-Service</div>
+            <div className="rc s" onClick={() => handleRoleClick('student')}>
+              <div className="rc-shine"></div>
+              <div className="rc-num">01</div>
+              <div className="ri">🎓</div>
+              <div className="rt">Student Login</div>
+              <div className="rb">Get Started</div>
             </div>
-            <div className="rc o" onClick={() => handleRoleClick('organizer')}><div className="rc-shine"></div><div className="rc-num">02</div>
-              <div className="ri">📋</div><div className="rt">Organizer</div><div className="rb">Committee / Club</div>
+            <div className="rc o" onClick={() => handleRoleClick('organizer')}>
+              <div className="rc-shine"></div>
+              <div className="rc-num">02</div>
+              <div className="ri">📋</div>
+              <div className="rt">Organizer</div>
+              <div className="rs">Committee / Club</div>
+              <div className="rb">Enter Portal</div>
             </div>
-            <div className="rc a" onClick={() => handleRoleClick('admin')}><div className="rc-shine"></div><div className="rc-num">03</div>
-              <div className="ri">🛡️</div><div className="rt">Admin</div><div className="rb">Master Access</div>
+            <div className="rc a" onClick={() => handleRoleClick('admin')}>
+              <div className="rc-shine"></div>
+              <div className="rc-num">03</div>
+              <div className="ri">🛡️</div>
+              <div className="rt">Admin</div>
+              <div className="rs">Master Access</div>
+              <div className="rb">System Login</div>
             </div>
           </div>
 
           <div style={{ textAlign: 'center', marginTop: 40 }}>
-            <span onClick={() => setCurrentView('home')} style={{ color: '#556e85', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
-              ← Cancel &amp; GO BACK
-            </span>
-          </div>
-        </section>
-      )}
-
-      {currentView === 'events' && (
-        <section className="sec reveal visible" style={{
-          minHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', alignItems: 'center',
-          padding: '40px 24px', position: 'relative', zIndex: 1, maxWidth: 1100, margin: '0 auto'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <h2 className="sh" style={{ color: '#f0f4ff' }}>Upcoming Events</h2>
-            <p className="sp2" style={{ margin: '0 auto' }}>Discover and register for the latest campus activities.</p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 24, width: '100%' }}>
-            {events.length === 0 ? (
-              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px 0', color: '#64748b' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                No active events available right now.
-              </div>
-            ) : events.map(ev => {
-              const pct = ev.seats > 0 ? Math.round((ev.filled / ev.seats) * 100) : 0;
-              return (
-                <div key={ev.id} style={{ background: 'rgba(10,5,30,0.6)', backdropFilter: 'blur(16px)', border: `1px solid ${ev.color}25`, borderRadius: 18, padding: 22, transition: 'all 0.3s' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                    <div style={{ fontSize: 26, width: 48, height: 48, borderRadius: 14, background: `${ev.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{ev.emoji}</div>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '3px 10px', borderRadius: 999, background: `${ev.color}18`, color: ev.color, border: `1px solid ${ev.color}30` }}>{ev.cat}</span>
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: '#f0f4ff', marginBottom: 6 }}>{ev.name}</div>
-                  <div style={{ fontSize: 12, color: '#475569', marginBottom: 14 }}>📅 {ev.date} &nbsp; 📍 {ev.venue}</div>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569', marginBottom: 5 }}>
-                      <span>Seats: {ev.filled}/{ev.seats}</span>
-                      <span style={{ color: ev.color, fontWeight: 700 }}>{pct}%</span>
-                    </div>
-                    <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 99 }}>
-                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: 99, background: ev.color }} />
-                    </div>
-                  </div>
-                  <button onClick={() => setCurrentView('login')} style={{ width: '100%', padding: '9px', borderRadius: 11, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: `linear-gradient(135deg,${ev.color},${ev.color}bb)`, color: '#fff' }}>
-                    Login to Register
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ textAlign: 'center', marginTop: 40 }}>
-            <span onClick={() => setCurrentView('home')} style={{ color: '#556e85', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+            <span onClick={() => setCurrentView('home')} style={{ color: '#cbd5e1', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }} onMouseOver={e => e.currentTarget.style.color = '#fff'} onMouseOut={e => e.currentTarget.style.color = '#cbd5e1'}>
               ← Cancel &amp; GO BACK
             </span>
           </div>
@@ -532,7 +529,7 @@ export default function LandingPage({ onLogin }: Props) {
             </form>
 
             <div style={{ textAlign: 'center', marginTop: 20 }}>
-              <span onClick={() => setCurrentView('home')} style={{ color: '#64748b', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+              <span onClick={() => setCurrentView('login')} style={{ color: '#64748b', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
                 ← Back to Roles
               </span>
             </div>
@@ -572,18 +569,38 @@ export default function LandingPage({ onLogin }: Props) {
                 }}>
                   <div style={{
                     background: 'rgba(15,12,41,0.95)', border: `1px solid ${registerEvent.color}55`, borderRadius: 24, padding: '32px 40px',
-                    width: '100%', maxWidth: 500, boxShadow: `0 30px 60px rgba(0,0,0,0.5), 0 0 40px ${registerEvent.color}20`,
-                    position: 'relative'
+                    width: '100%', maxWidth: 520, boxShadow: `0 30px 60px rgba(0,0,0,0.5), 0 0 40px ${registerEvent.color}20`,
+                    position: 'relative', maxHeight: '90vh', overflowY: 'auto'
                   }}>
-                    <div style={{ position: 'absolute', top: 20, right: 24, fontSize: 24, color: '#64748b', cursor: 'pointer' }} onClick={() => setRegisterEvent(null)}>×</div>
+                    <div style={{ position: 'absolute', top: 20, right: 24, fontSize: 24, color: '#64748b', cursor: 'pointer' }} onClick={() => { setRegisterEvent(null); setPaymentSS(null); setPaymentSSName(''); setTeamName(''); setTeamMembers([]); }}>×</div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                       <div style={{ width: 44, height: 44, borderRadius: 12, background: `${registerEvent.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{registerEvent.emoji}</div>
                       <div>
                         <div style={{ fontSize: 12, color: registerEvent.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Register For</div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: '#f0f4ff' }}>{registerEvent.name}</div>
                       </div>
+                      
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {registerEvent.team_size_max > 1 ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(192,132,252,0.15)', color: '#c084fc', border: '1px solid rgba(192,132,252,0.3)', whiteSpace: 'nowrap' }}>👥 Team ({registerEvent.team_size_min}-{registerEvent.team_size_max})</span>
+                        ) : (
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', whiteSpace: 'nowrap' }}>👤 Individual</span>
+                        )}
+                        {registerEvent.is_paid
+                          ? <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}>💰 Paid · {registerEvent.amount}</span>
+                          : <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', whiteSpace: 'nowrap' }}>🆓 Free</span>
+                        }
+                      </div>
                     </div>
+
+                    {registerEvent.whatsapp_link && (
+                      <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(37,211,102,0.06)', border: '1px solid rgba(37,211,102,0.2)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 18 }}>💬</span>
+                        <div style={{ flex: 1, fontSize: 13, color: '#94a3b8' }}>WhatsApp group available</div>
+                        <a href={registerEvent.whatsapp_link} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: '#25d366', textDecoration: 'none' }}>Join →</a>
+                      </div>
+                    )}
 
                     {regStatus === 'success' ? (
                       <div style={{ textAlign: 'center', padding: '40px 0', color: '#10b981' }}>
@@ -592,12 +609,12 @@ export default function LandingPage({ onLogin }: Props) {
                         <p style={{ color: '#94a3b8' }}>Check your email for further instructions.</p>
                       </div>
                     ) : (
-                      <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                           <input required placeholder="Full Name" value={regData.name} onChange={e => setRegData({ ...regData, name: e.target.value })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none' }} />
                           <input required type="email" placeholder="Email ID" value={regData.email} onChange={e => setRegData({ ...regData, email: e.target.value })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none' }} />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(80px, 1fr) 2fr 1fr', gap: 16 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(80px, 1fr) 2fr 1fr', gap: 14 }}>
                           <select required value={regData.year} onChange={e => setRegData({ ...regData, year: e.target.value })} style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none', boxSizing: 'border-box' }}>
                             <option value="" style={{ background: '#0f172a' }}>Year</option>
                             <option style={{ background: '#0f172a' }}>FE</option><option style={{ background: '#0f172a' }}>SE</option><option style={{ background: '#0f172a' }}>TE</option><option style={{ background: '#0f172a' }}>BE</option>
@@ -606,19 +623,101 @@ export default function LandingPage({ onLogin }: Props) {
                           <input required placeholder="Div (e.g. A)" value={regData.division} onChange={e => setRegData({ ...regData, division: e.target.value })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none' }} />
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                           <input required placeholder="Mobile No." value={regData.mobile_no} onChange={e => setRegData({ ...regData, mobile_no: e.target.value })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none' }} />
                           <input required placeholder="TUF ID" value={regData.tuf_id} onChange={e => setRegData({ ...regData, tuf_id: e.target.value })} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: 12, color: '#fff', outline: 'none' }} />
                         </div>
 
+                        {/* ── Team Details (If Team Event) ── */}
+                        {registerEvent.team_size_max > 1 && (
+                          <div style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 14, padding: 18 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#c084fc', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>👥 Team Details</div>
+                            
+                            <div style={{ marginBottom: 16 }}>
+                              <input
+                                required type="text" placeholder="Team Name (e.g., The Innovators)"
+                                value={teamName} onChange={e => setTeamName(e.target.value)}
+                                style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.05)', color: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                              />
+                            </div>
+
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, fontWeight: 600 }}>Member 1 (Team Leader)</div>
+                            <div style={{ padding: 12, margin: '0 0 16px 0', background: 'rgba(255,255,255,0.05)', borderRadius: 10, fontSize: 13, color: '#cbd5e1' }}>
+                              Details will be taken from your form entries above.
+                            </div>
+
+                            {teamMembers.map((member, i) => (
+                              <div key={i} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: i < teamMembers.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                  <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Member {i + 2}</div>
+                                  <span onClick={() => {
+                                    const newM = [...teamMembers]; newM.splice(i, 1); setTeamMembers(newM);
+                                  }} style={{ fontSize: 12, color: '#ef4444', cursor: 'pointer', fontWeight: 600 }}>Remove</span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                                  <input type="text" placeholder="Name" value={member.name} onChange={e => { const newM = [...teamMembers]; newM[i].name = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                                  <input type="text" placeholder="TUF ID" value={member.tuf_id} onChange={e => { const newM = [...teamMembers]; newM[i].tuf_id = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                                </div>
+                                <input type="email" placeholder="Email Address" value={member.email} onChange={e => { const newM = [...teamMembers]; newM[i].email = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                              </div>
+                            ))}
+
+                            {teamMembers.length + 1 < registerEvent.team_size_max && (
+                              <button type="button" onClick={() => setTeamMembers([...teamMembers, { name: '', email: '', tuf_id: '' }])} style={{ padding: '10px', width: '100%', borderRadius: 10, border: '1px dashed rgba(139,92,246,0.5)', background: 'rgba(139,92,246,0.05)', color: '#c084fc', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                                + Add Additional Member
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── Payment section (paid events only) ── */}
+                        {registerEvent.is_paid && (
+                          <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, padding: 16 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>💰 Payment Required — {registerEvent.amount}</div>
+                            {registerEvent.qr_image && (
+                              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>Scan to Pay</div>
+                                <img src={registerEvent.qr_image} alt="QR" style={{ width: 150, height: 150, objectFit: 'contain', borderRadius: 10, border: '1px solid rgba(245,158,11,0.3)', background: '#fff', padding: 5 }} />
+                                <div style={{ fontSize: 11, color: '#475569', marginTop: 6 }}>Pay {registerEvent.amount}, then upload screenshot below</div>
+                              </div>
+                            )}
+                            <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Payment Screenshot *</label>
+                            <label htmlFor="lp-pay-ss" style={{
+                              display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
+                              borderRadius: 11, border: `2px dashed ${paymentSS ? 'rgba(16,185,129,0.5)' : 'rgba(245,158,11,0.35)'}`,
+                              background: paymentSS ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.04)', cursor: 'pointer'
+                            }}>
+                              <span>{paymentSS ? '✅' : '📎'}</span>
+                              <div>
+                                <div style={{ fontSize: 13, color: paymentSS ? '#10b981' : '#94a3b8', fontWeight: 600 }}>{paymentSSName || 'Upload Screenshot'}</div>
+                                <div style={{ fontSize: 11, color: '#475569' }}>PNG/JPG • Max 3 MB</div>
+                              </div>
+                            </label>
+                            <input id="lp-pay-ss" type="file" accept="image/*" style={{ display: 'none' }}
+                              onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 3 * 1024 * 1024) { alert('Max 3 MB'); return; }
+                                setPaymentSSName(file.name);
+                                const reader = new FileReader();
+                                reader.onload = ev => setPaymentSS(ev.target?.result as string);
+                                reader.readAsDataURL(file);
+                              }}
+                            />
+                            {paymentSS && <div style={{ textAlign: 'center', marginTop: 10 }}><img src={paymentSS} alt="preview" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)' }} /></div>}
+                          </div>
+                        )}
+
                         {regStatus === 'error' && <div style={{ color: '#ef4444', fontSize: 14 }}>{regError}</div>}
 
-                        <button type="submit" disabled={regStatus === 'loading'} style={{
-                          marginTop: 8, padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: 16, color: '#fff', border: 'none',
-                          background: `linear-gradient(135deg,${registerEvent.color},${registerEvent.color}dd)`, cursor: regStatus === 'loading' ? 'wait' : 'pointer',
-                          boxShadow: `0 0 20px ${registerEvent.color}40`, opacity: regStatus === 'loading' ? 0.7 : 1
+                        <button type="submit" disabled={regStatus === 'loading' || (registerEvent.is_paid && !paymentSS)} style={{
+                          marginTop: 4, padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: 16, color: '#fff', border: 'none',
+                          background: `linear-gradient(135deg,${registerEvent.color},${registerEvent.color}dd)`,
+                          cursor: (regStatus === 'loading' || (registerEvent.is_paid && !paymentSS)) ? 'default' : 'pointer',
+                          opacity: (regStatus === 'loading' || (registerEvent.is_paid && !paymentSS)) ? 0.5 : 1,
+                          transition: 'opacity 0.2s'
                         }}>
-                          {regStatus === 'loading' ? 'Processing...' : 'Confirm Registration'}
+                          {regStatus === 'loading' ? 'Processing...' : registerEvent.is_paid && !paymentSS ? '⬆ Upload Screenshot to Continue' : 'Confirm Registration'}
                         </button>
                       </form>
                     )}

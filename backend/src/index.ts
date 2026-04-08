@@ -10,7 +10,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Allow base64 QR images + payment screenshots
 
 // Basic MySQL connection pool
 const pool = mysql.createPool({
@@ -37,7 +37,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 app.post('/api/students/register', async (req, res) => {
-  const { eventId, name, email, className, division, year, mobile_no, tuf_id } = req.body;
+  const { eventId, name, email, className, division, year, mobile_no, tuf_id, payment_ss } = req.body;
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and Email are required' });
   }
@@ -56,14 +56,12 @@ app.post('/api/students/register', async (req, res) => {
     let userId;
 
     if (existingUsers.length > 0) {
-      // Update existing student profile
       userId = existingUsers[0].id;
       await pool.query(
         'UPDATE users SET name=?, class=?, division=?, year=?, mobile_no=?, tuf_id=? WHERE id=?',
         [name, className, division || null, year, mobile_no, tuf_id, userId]
       );
     } else {
-      // Insert new student profile
       const [insertResult]: any = await pool.query(
         'INSERT INTO users (name, email, role, class, division, year, mobile_no, tuf_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [name, email, 'student', className, division || null, year, mobile_no, tuf_id]
@@ -71,10 +69,16 @@ app.post('/api/students/register', async (req, res) => {
       userId = insertResult.insertId;
     }
 
-    // 2. If an eventId was provided, register them for the event
+    // 2. Register for the event (store payment screenshot and team details if provided)
     if (eventId) {
+      const { team_name, team_members } = req.body;
       try {
-        await pool.query('INSERT IGNORE INTO registrations (event_id, user_id) VALUES (?, ?)', [eventId, userId]);
+        await pool.query(
+          `INSERT INTO registrations (event_id, user_id, payment_ss, team_name, team_members)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE payment_ss = VALUES(payment_ss), team_name = VALUES(team_name), team_members = VALUES(team_members)`,
+          [eventId, userId, payment_ss || null, team_name || null, team_members ? JSON.stringify(team_members) : null]
+        );
       } catch (eventErr) {
         console.error('Failed to register for event:', eventErr);
       }
@@ -210,7 +214,10 @@ app.get('/api/events', async (req, res) => {
     res.json(events.map((e: any) => ({
       id: e.id, name: e.title, cat: e.category, date: e.event_date ? new Date(e.event_date).toISOString().split('T')[0] : '',
       seats: e.seats, organizer: e.organizer_name, time: e.time, venue: e.venue,
-      filled: e.filled, color: e.color, emoji: e.emoji, status: e.status
+      filled: e.filled, color: e.color, emoji: e.emoji, status: e.status,
+      is_paid: !!e.is_paid, amount: e.amount || '',
+      qr_image: e.qr_image || null, whatsapp_link: e.whatsapp_link || null,
+      team_size_min: e.team_size_min || 1, team_size_max: e.team_size_max || 1
     })));
   } catch (error) {
     console.error('Fetch events error:', error);
@@ -219,11 +226,11 @@ app.get('/api/events', async (req, res) => {
 });
 
 app.post('/api/events', async (req, res) => {
-  const { name, cat, date, seats, organizer, time, venue, color, emoji } = req.body;
+  const { name, cat, date, seats, organizer, time, venue, color, emoji, is_paid, amount, qr_image, whatsapp_link, team_size_min, team_size_max } = req.body;
   try {
     const [result]: any = await pool.query(
-      `INSERT INTO events (title, category, event_date, seats, organizer_name, time, venue, color, emoji, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')`,
-      [name, cat, date, seats || 0, organizer, time, venue, color, emoji]
+      `INSERT INTO events (title, category, event_date, seats, organizer_name, time, venue, color, emoji, status, is_paid, amount, qr_image, whatsapp_link, team_size_min, team_size_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?)`,
+      [name, cat, date, seats || 0, organizer, time, venue, color, emoji, is_paid ? 1 : 0, is_paid ? (amount || '') : null, is_paid ? (qr_image || null) : null, whatsapp_link || null, team_size_min || 1, team_size_max || 1]
     );
     res.status(201).json({ success: true, eventId: result.insertId });
   } catch (error) {
@@ -248,7 +255,20 @@ app.get('/api/events/:id/registrants', async (req, res) => {
   const { id } = req.params;
   try {
     const [rows]: any = await pool.query(`
-      SELECT u.name, u.year, u.class as branch, u.division, u.tuf_id, u.email, u.mobile_no, r.registered_at
+      SELECT 
+        r.id as registration_id,
+        r.payment_ss,
+        r.payment_status,
+        r.team_name,
+        r.team_members,
+        r.registered_at,
+        u.name, 
+        u.year, 
+        u.class as branch, 
+        u.division, 
+        u.tuf_id, 
+        u.email, 
+        u.mobile_no
       FROM registrations r
       JOIN users u ON r.user_id = u.id
       WHERE r.event_id = ?
@@ -263,6 +283,21 @@ app.get('/api/events/:id/registrants', async (req, res) => {
   } catch (error) {
     console.error('Fetch registrants error:', error);
     res.status(500).json({ error: 'Failed to fetch registrants' });
+  }
+});
+
+app.put('/api/registrations/:id/payment_status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!['Pending', 'Verified', 'Rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  try {
+    await pool.query('UPDATE registrations SET payment_status = ? WHERE id = ?', [status, id]);
+    res.json({ success: true, status });
+  } catch (error) {
+    console.error('Update payment status error:', error);
+    res.status(500).json({ error: 'Failed to update payment status' });
   }
 });
 

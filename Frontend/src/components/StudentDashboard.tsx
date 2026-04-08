@@ -85,6 +85,10 @@ export default function StudentDashboard({ onLogout, user }: Props) {
   }, [user]);
   const [modal, setModal] = useState<any | null>(null);
   const [hovNav, setHovNav] = useState<string | null>(null);
+  const [paymentSS, setPaymentSS] = useState<string | null>(null);
+  const [paymentSSName, setPaymentSSName] = useState('');
+  const [teamName, setTeamName] = useState('');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   const initials = user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0,2).toUpperCase() : 'ST';
   const firstName = user?.name ? user.name.split(' ')[0] : 'Student';
@@ -97,6 +101,27 @@ export default function StudentDashboard({ onLogout, user }: Props) {
 
   const register = async (id: number) => {
     if (registered.includes(id) || loadingReg) return;
+    const ev = events.find(e => e.id === id);
+    if (ev?.is_paid && !paymentSS) {
+      alert('Please upload your payment screenshot before registering.');
+      return;
+    }
+    
+    // Team validation
+    if (ev?.team_size_max > 1) {
+      if (!teamName.trim()) { alert('Team Name is required for group events.'); return; }
+      if (teamMembers.length + 1 < ev.team_size_min || teamMembers.length + 1 > ev.team_size_max) {
+        alert(`Your team must have between ${ev.team_size_min} and ${ev.team_size_max} members (including you).`);
+        return;
+      }
+      for (const m of teamMembers) {
+        if (!m.name || !m.email || !m.tuf_id) {
+          alert('Please fill all details for every team member.');
+          return;
+        }
+      }
+    }
+
     setLoadingReg(true);
     try {
       const res = await fetch('http://localhost:5000/api/students/register', {
@@ -109,13 +134,20 @@ export default function StudentDashboard({ onLogout, user }: Props) {
           className: user?.class,
           year: user?.year,
           mobile_no: user?.mobile_no,
-          tuf_id: user?.tuf_id
+          tuf_id: user?.tuf_id,
+          payment_ss: paymentSS || null,
+          team_name: ev?.team_size_max > 1 ? teamName : null,
+          team_members: ev?.team_size_max > 1 ? teamMembers : null,
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setRegistered(r => [...r, id]);
         setModal(null);
+        setPaymentSS(null);
+        setPaymentSSName('');
+        setTeamName('');
+        setTeamMembers([]);
       } else {
         alert(data.error || 'Failed to register');
       }
@@ -374,14 +406,27 @@ export default function StudentDashboard({ onLogout, user }: Props) {
       {/* Modal */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.85)', backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-          onClick={() => setModal(null)}>
-          <div style={{ background: 'rgba(8,4,25,0.97)', backdropFilter: 'blur(30px)', border: `1px solid ${modal.color}40`, borderRadius: 24, padding: 36, maxWidth: 480, width: '100%' }}
+          onClick={() => { setModal(null); setPaymentSS(null); setPaymentSSName(''); setTeamName(''); setTeamMembers([]); }}>
+          <div style={{ background: 'rgba(8,4,25,0.97)', backdropFilter: 'blur(30px)', border: `1px solid ${modal.color}40`, borderRadius: 24, padding: 36, maxWidth: 500, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 40, marginBottom: 16 }}>{modal.emoji}</div>
-            <span style={g.tag(modal.color)}>{modal.cat}</span>
-            <h3 style={{ fontSize: 22, fontWeight: 800, color: '#f0f4ff', margin: '12px 0 8px' }}>{modal.name}</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={g.tag(modal.color)}>{modal.cat}</span>
+              {modal.team_size_max > 1 ? (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(192,132,252,0.15)', color: '#c084fc', border: '1px solid rgba(192,132,252,0.3)' }}>👥 Team ({modal.team_size_min}-{modal.team_size_max})</span>
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)' }}>👤 Individual</span>
+              )}
+              {modal.is_paid && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>💰 Paid · {modal.amount}</span>
+              )}
+              {!modal.is_paid && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}>🆓 Free</span>
+              )}
+            </div>
+            <h3 style={{ fontSize: 22, fontWeight: 800, color: '#f0f4ff', margin: '0 0 8px' }}>{modal.name}</h3>
             <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>{modal.desc}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
               {[['📅', 'Date', modal.date], ['⏰', 'Time', modal.time], ['📍', 'Venue', modal.venue], ['👥', 'Seats', `${modal.filled}/${modal.seats}`]].map(([icon, label, val]) => (
                 <div key={label} style={{ display: 'flex', gap: 10, fontSize: 14 }}>
                   <span>{icon}</span>
@@ -389,22 +434,129 @@ export default function StudentDashboard({ onLogout, user }: Props) {
                   <span style={{ color: '#f0f4ff' }}>{val}</span>
                 </div>
               ))}
+              {modal.whatsapp_link && (
+                <div style={{ display: 'flex', gap: 10, fontSize: 14 }}>
+                  <span>💬</span>
+                  <span style={{ color: '#475569', minWidth: 60 }}>WhatsApp:</span>
+                  <a href={modal.whatsapp_link} target="_blank" rel="noreferrer" style={{ color: '#25d366', fontWeight: 600, textDecoration: 'none' }}>Join Group →</a>
+                </div>
+              )}
             </div>
+
+            {/* ── Payment section (paid events only) ── */}
+            {modal.is_paid && !registered.includes(modal.id) && (
+              <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>💰 Payment Required — {modal.amount}</div>
+
+                {/* Organiser QR */}
+                {modal.qr_image && (
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8, fontWeight: 600 }}>Scan to Pay</div>
+                    <img
+                      src={modal.qr_image}
+                      alt="Payment QR"
+                      style={{ width: 160, height: 160, objectFit: 'contain', borderRadius: 12, border: '1px solid rgba(245,158,11,0.35)', background: '#fff', padding: 6 }}
+                    />
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 6 }}>Pay {modal.amount} via the QR above, then upload your screenshot below</div>
+                  </div>
+                )}
+
+                {/* Screenshot upload */}
+                <div>
+                  <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 8 }}>Payment Screenshot *</label>
+                  <label htmlFor="pay-ss-upload" style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                    borderRadius: 12, border: `2px dashed ${paymentSS ? 'rgba(16,185,129,0.5)' : 'rgba(245,158,11,0.35)'}`,
+                    background: paymentSS ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.04)',
+                    cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <span style={{ fontSize: 20 }}>{paymentSS ? '✅' : '📎'}</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: paymentSS ? '#10b981' : '#94a3b8', fontWeight: 600 }}>{paymentSSName || 'Upload Screenshot'}</div>
+                      <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>PNG/JPG • Max 3 MB</div>
+                    </div>
+                  </label>
+                  <input
+                    id="pay-ss-upload" type="file" accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 3 * 1024 * 1024) { alert('File too large. Max 3 MB.'); return; }
+                      setPaymentSSName(file.name);
+                      const reader = new FileReader();
+                      reader.onload = ev => setPaymentSS(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {paymentSS && (
+                    <div style={{ marginTop: 10, textAlign: 'center' }}>
+                      <img src={paymentSS} alt="SS Preview" style={{ maxWidth: 140, maxHeight: 140, borderRadius: 10, border: '1px solid rgba(16,185,129,0.3)' }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Team Details (If Team Event) ── */}
+            {modal.team_size_max > 1 && !registered.includes(modal.id) && (
+              <div style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#c084fc', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 }}>👥 Team Details</div>
+                
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: 6 }}>Team Name *</label>
+                  <input
+                    type="text" placeholder="e.g., The Innovators"
+                    value={teamName} onChange={e => setTeamName(e.target.value)}
+                    style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(139,92,246,0.3)', background: 'rgba(139,92,246,0.05)', color: '#fff', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, fontWeight: 600 }}>Member 1 (Team Leader)</div>
+                <div style={{ padding: 12, background: 'rgba(255,255,255,0.05)', borderRadius: 10, marginBottom: 16, fontSize: 13, color: '#cbd5e1' }}>
+                  {user?.name} ({user?.email}) - {user?.tuf_id}
+                </div>
+
+                {teamMembers.map((member, i) => (
+                  <div key={i} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: i < teamMembers.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Member {i + 2}</div>
+                      <span onClick={() => {
+                        const newM = [...teamMembers]; newM.splice(i, 1); setTeamMembers(newM);
+                      }} style={{ fontSize: 12, color: '#ef4444', cursor: 'pointer', fontWeight: 600 }}>Remove</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <input type="text" placeholder="Name" value={member.name} onChange={e => { const newM = [...teamMembers]; newM[i].name = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                      <input type="text" placeholder="TUF ID" value={member.tuf_id} onChange={e => { const newM = [...teamMembers]; newM[i].tuf_id = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                    </div>
+                    <input type="email" placeholder="Email Address" value={member.email} onChange={e => { const newM = [...teamMembers]; newM[i].email = e.target.value; setTeamMembers(newM); }} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                  </div>
+                ))}
+
+                {teamMembers.length + 1 < modal.team_size_max && (
+                  <button onClick={() => setTeamMembers([...teamMembers, { name: '', email: '', tuf_id: '' }])} style={{ padding: '10px', width: '100%', borderRadius: 10, border: '1px dashed rgba(139,92,246,0.5)', background: 'rgba(139,92,246,0.05)', color: '#c084fc', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                    + Add Additional Member
+                  </button>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setModal(null)} style={{ flex: 1, padding: '12px', borderRadius: 13, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-              <button 
-                onClick={() => register(modal.id)} 
-                disabled={registered.includes(modal.id) || loadingReg}
-                style={{ 
-                  flex: 2, padding: '12px', borderRadius: 13, border: 'none', 
-                  cursor: (registered.includes(modal.id) || loadingReg) ? 'default' : 'pointer', 
-                  fontWeight: 700, fontSize: 14, 
-                  background: registered.includes(modal.id) ? 'rgba(16,185,129,0.2)' : `linear-gradient(135deg,${modal.color},${modal.color}bb)`, 
+              <button onClick={() => { setModal(null); setPaymentSS(null); setPaymentSSName(''); setTeamName(''); setTeamMembers([]); }} style={{ flex: 1, padding: '12px', borderRadius: 13, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button
+                onClick={() => register(modal.id)}
+                disabled={registered.includes(modal.id) || loadingReg || (modal.is_paid && !paymentSS)}
+                style={{
+                  flex: 2, padding: '12px', borderRadius: 13, border: 'none',
+                  cursor: (registered.includes(modal.id) || loadingReg || (modal.is_paid && !paymentSS)) ? 'default' : 'pointer',
+                  fontWeight: 700, fontSize: 14,
+                  background: registered.includes(modal.id) ? 'rgba(16,185,129,0.2)' : `linear-gradient(135deg,${modal.color},${modal.color}bb)`,
                   color: registered.includes(modal.id) ? '#10b981' : '#fff',
-                  opacity: loadingReg ? 0.7 : 1
+                  opacity: (loadingReg || (modal.is_paid && !paymentSS && !registered.includes(modal.id))) ? 0.5 : 1,
+                  transition: 'opacity 0.2s'
                 }}
               >
-                {loadingReg ? 'Processing...' : registered.includes(modal.id) ? '✓ Already Registered' : 'Confirm Registration'}
+                {loadingReg ? 'Processing...' : registered.includes(modal.id) ? '✓ Already Registered' : modal.is_paid && !paymentSS ? '⬆ Upload SS to Continue' : 'Confirm Registration'}
               </button>
             </div>
           </div>

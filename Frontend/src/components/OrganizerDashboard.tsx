@@ -39,6 +39,14 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
   const [events, setEvents] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', organizer: '', cat: 'Technology', date: '', time: '', venue: '', seats: '' });
+  const [isTeam, setIsTeam] = useState(false);
+  const [teamSizeMin, setTeamSizeMin] = useState('2');
+  const [teamSizeMax, setTeamSizeMax] = useState('4');
+  const [isPaid, setIsPaid] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrFileName, setQrFileName] = useState('');
+  const [whatsappLink, setWhatsappLink] = useState('');
   const [isSetup, setIsSetup] = useState(!user?.is_activated);
   const [setupForm, setSetupForm] = useState({ name: '', year: '', branch: '', committee: '' });
   const [setupLoading, setSetupLoading] = useState(false);
@@ -46,7 +54,48 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
   const [orgData, setOrgData] = useState(user || {});
   const [dashLoading, setDashLoading] = useState(true);
 
+  // Dashboard Summary State
   const [myRegistrants, setMyRegistrants] = useState<any[]>([]);
+
+  // Registrants Viewing States
+  const [showRegModal, setShowRegModal] = useState(false);
+  const [selectedEventName, setSelectedEventName] = useState('');
+  const [registrants, setRegistrants] = useState<any[]>([]);
+  const [regsLoading, setRegsLoading] = useState(false);
+  const [viewingSS, setViewingSS] = useState<string | null>(null);
+
+  const viewRegistrants = async (eventId: number, eventName: string) => {
+    setSelectedEventName(eventName);
+    setShowRegModal(true);
+    setRegsLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/events/${eventId}/registrants`);
+      const data = await res.json();
+      if (data.success) {
+        setRegistrants(data.registrants);
+      }
+    } catch (err) {
+      console.error('Error fetching registrants:', err);
+    } finally {
+      setRegsLoading(false);
+    }
+  };
+
+  const updatePaymentStatus = async (regId: number, status: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/registrations/${regId}/payment_status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRegistrants(prev => prev.map(r => r.registration_id === regId ? { ...r, payment_status: status } : r));
+      }
+    } catch (err) {
+      console.error('Error updating payment status:', err);
+    }
+  };
 
   useEffect(() => {
     setDashLoading(true);
@@ -60,13 +109,13 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
   useEffect(() => {
     const orgEvents = events.filter((e: any) => e.organizer === orgData?.committee);
     if (orgEvents.length > 0) {
-      Promise.all(orgEvents.map(ev => 
+      Promise.all(orgEvents.map((ev: any) => 
         fetch(`http://localhost:5000/api/events/${ev.id}/registrants`)
           .then(r => r.json())
           .then(d => ({ event: ev.name, registrants: d.registrants || [] }))
       ))
       .then(results => {
-         const allRegs = results.flatMap(r => r.registrants.map((req: any) => ({
+         const allRegs = results.flatMap((r: any) => r.registrants.map((req: any) => ({
            name: req.name,
            roll: req.tuf_id || '-',
            event: r.event,
@@ -108,12 +157,21 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
 
   const createEvent = async () => {
     if (!form.name || !form.date) return;
+    if (isPaid && !amount) { alert('Please enter the event fee amount.'); return; }
     const organizer = orgData.committee || form.organizer;
     try {
       const res = await fetch('http://localhost:5000/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, organizer, color: '#10b981', emoji: '🎯' })
+        body: JSON.stringify({
+          ...form, organizer, color: '#10b981', emoji: '🎯',
+          is_paid: isPaid,
+          amount: isPaid ? amount : '',
+          qr_image: isPaid ? qrImage : null,
+          whatsapp_link: whatsappLink || null,
+          team_size_min: isTeam ? parseInt(teamSizeMin) : 1,
+          team_size_max: isTeam ? parseInt(teamSizeMax) : 1,
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -121,8 +179,13 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
           id: data.eventId, name: form.name, organizer, cat: form.cat, date: form.date, time: form.time,
           venue: form.venue, seats: form.seats ? parseInt(form.seats) : 0, filled: 0,
           color: '#10b981', emoji: '🎯', status: 'Pending',
+          is_paid: isPaid, amount: isPaid ? amount : '',
+          whatsapp_link: whatsappLink || null,
+          team_size_min: isTeam ? parseInt(teamSizeMin) : 1,
+          team_size_max: isTeam ? parseInt(teamSizeMax) : 1,
         }, ...e]);
         setForm({ name: '', organizer: '', cat: 'Technology', date: '', time: '', venue: '', seats: '' });
+        setIsPaid(false); setIsTeam(false); setAmount(''); setQrImage(null); setQrFileName(''); setWhatsappLink('');
         setShowModal(false);
         setTab('My Events');
       }
@@ -344,6 +407,7 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button style={{ padding: '8px 16px', borderRadius: 10, border: `1px solid ${ev.color}40`, background: `${ev.color}12`, color: ev.color, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>✏️ Edit</button>
                         <button onClick={() => deleteEvent(ev.id)} style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>🗑️ Delete</button>
+                        <button onClick={() => viewRegistrants(ev.id, ev.name)} style={{ padding: '8px 16px', borderRadius: 10, border: `1px solid ${ev.color}40`, background: `${ev.color}18`, color: ev.color, cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>👥 View Registrants</button>
                         <button onClick={() => exportToCSV(ev.id, ev.name)} style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.08)', color: '#10b981', cursor: 'pointer', fontWeight: 600, fontSize: 12, marginLeft: 'auto' }}>📥 Download CSV</button>
                       </div>
                     </div>
@@ -422,15 +486,245 @@ export default function OrganizerDashboard({ onLogout, user }: Props) {
             ))}
             <div>
               <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }}>Category</label>
-              <select value={form.cat} onChange={e => setForm(p => ({ ...p, cat: e.target.value }))} style={{ ...g.input, marginBottom: 24 }}>
+              <select value={form.cat} onChange={e => setForm(p => ({ ...p, cat: e.target.value }))} style={{ ...g.input, marginBottom: 20 }}>
                 {['Technology', 'Coding', 'Cultural', 'Workshop', 'Sports', 'Design'].map(c => <option key={c} style={{ background: '#0f172a' }}>{c}</option>)}
               </select>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+
+            {/* ── Participation Type Toggle ── */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 10 }}>Participation Type</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ fontSize: 13, color: !isTeam ? '#38bdf8' : '#94a3b8', fontWeight: !isTeam ? 700 : 500, transition: 'color 0.2s' }}>👤 Individual</span>
+                <div
+                  onClick={() => setIsTeam(p => !p)}
+                  style={{
+                    width: 52, height: 28, borderRadius: 99, cursor: 'pointer', position: 'relative',
+                    background: isTeam ? 'linear-gradient(135deg,#c084fc,#8b5cf6)' : 'rgba(255,255,255,0.1)',
+                    border: isTeam ? '1px solid rgba(192,132,252,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                    transition: 'background 0.3s, border 0.3s',
+                    boxShadow: isTeam ? '0 0 12px rgba(139,92,246,0.35)' : 'none',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3, left: isTeam ? 26 : 3,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.3s', boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                  }} />
+                </div>
+                <span style={{ fontSize: 13, color: isTeam ? '#c084fc' : '#94a3b8', fontWeight: isTeam ? 700 : 500, transition: 'color 0.2s' }}>👥 Team</span>
+              </div>
+            </div>
+
+            {isTeam && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 6 }}>Min Team Size</label>
+                  <input type="number" min="1" value={teamSizeMin} onChange={e => setTeamSizeMin(e.target.value)} style={{ ...g.input, marginBottom: 0 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 6 }}>Max Team Size</label>
+                  <input type="number" min="1" value={teamSizeMax} onChange={e => setTeamSizeMax(e.target.value)} style={{ ...g.input, marginBottom: 0 }} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Paid / Free Toggle ── */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 10 }}>Event Type</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <span style={{ fontSize: 13, color: isPaid ? '#94a3b8' : '#f0f4ff', fontWeight: isPaid ? 500 : 700, transition: 'color 0.2s' }}>🆓 Free</span>
+                {/* Toggle pill */}
+                <div
+                  onClick={() => setIsPaid(p => !p)}
+                  style={{
+                    width: 52, height: 28, borderRadius: 99, cursor: 'pointer', position: 'relative',
+                    background: isPaid ? 'linear-gradient(135deg,#f59e0b,#ef4444)' : 'rgba(255,255,255,0.1)',
+                    border: isPaid ? '1px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                    transition: 'background 0.3s, border 0.3s',
+                    boxShadow: isPaid ? '0 0 12px rgba(245,158,11,0.35)' : 'none',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3, left: isPaid ? 26 : 3,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.3s', boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                  }} />
+                </div>
+                <span style={{ fontSize: 13, color: isPaid ? '#f59e0b' : '#94a3b8', fontWeight: isPaid ? 700 : 500, transition: 'color 0.2s' }}>💰 Paid</span>
+              </div>
+            </div>
+
+            {/* ── Paid-only fields ── */}
+            {isPaid && (
+              <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, padding: '18px 18px 4px', marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: 14 }}>💰 Payment Details</div>
+
+                {/* Amount */}
+                <div>
+                  <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }}>Entry Fee *</label>
+                  <input
+                    type="text" placeholder="e.g., 50 or ₹500 Per Team"
+                    value={amount} onChange={e => setAmount(e.target.value)}
+                    style={{ ...g.input, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.05)' }}
+                  />
+                </div>
+
+                {/* QR Upload */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }}>Payment QR Code *</label>
+                  <label htmlFor="qr-upload" style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                    borderRadius: 12, border: `2px dashed ${qrImage ? 'rgba(16,185,129,0.5)' : 'rgba(245,158,11,0.3)'}`,
+                    background: qrImage ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.04)',
+                    cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <span style={{ fontSize: 22 }}>{qrImage ? '✅' : '📷'}</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: qrImage ? '#10b981' : '#94a3b8', fontWeight: 600 }}>
+                        {qrFileName || 'Upload QR Image'}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>PNG/JPG/WEBP • Max 2 MB</div>
+                    </div>
+                  </label>
+                  <input
+                    id="qr-upload" type="file" accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) { alert('File too large. Max 2 MB.'); return; }
+                      setQrFileName(file.name);
+                      const reader = new FileReader();
+                      reader.onload = ev => setQrImage(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {qrImage && (
+                    <div style={{ marginTop: 10, textAlign: 'center' }}>
+                      <img src={qrImage} alt="QR Preview" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 10, border: '1px solid rgba(16,185,129,0.3)' }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── WhatsApp Group Link (Optional) ── */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }}>WhatsApp Group Link <span style={{ color: '#334155', fontWeight: 400, textTransform: 'none' as const }}>(Optional)</span></label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16 }}>💬</span>
+                <input
+                  type="url" placeholder="https://chat.whatsapp.com/..."
+                  value={whatsappLink} onChange={e => setWhatsappLink(e.target.value)}
+                  style={{ ...g.input, paddingLeft: 40, marginBottom: 0 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
               <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: '12px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
               <button onClick={createEvent} style={{ flex: 2, padding: '12px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#8b5cf6,#ec4899)', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>Create Event →</button>
             </div>
           </div>
+        </div>
+      )}
+      {/* VIEW REGISTRANTS MODAL */}
+      {showRegModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5,5,16,0.9)', backdropFilter: 'blur(12px)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setShowRegModal(false)}>
+          <div style={{ background: 'rgba(13,13,32,0.99)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 28, padding: 32, maxWidth: 1000, width: '100%', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#f0f4ff' }}>{selectedEventName}</div>
+                <div style={{ fontSize: 13, color: '#64748b' }}>Manage and verify all registrations for this event</div>
+              </div>
+              <div onClick={() => setShowRegModal(false)} style={{ fontSize: 24, color: '#475569', cursor: 'pointer' }}>×</div>
+            </div>
+
+            <div style={{ flex: 1, overflow: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)' }}>
+              {regsLoading ? (
+                <div style={{ color: '#64748b', textAlign: 'center', padding: '100px 0' }}>📂 Loading records...</div>
+              ) : registrants.length === 0 ? (
+                <div style={{ color: '#64748b', textAlign: 'center', padding: '100px 0' }}>📭 No registrations found yet.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(255,255,255,0.03)', zIndex: 5 }}>
+                    <tr>
+                      <th style={{ padding: '16px 20px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Participant</th>
+                      <th style={{ padding: '16px 20px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Academic Details</th>
+                      <th style={{ padding: '16px 20px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Team Info</th>
+                      <th style={{ padding: '16px 20px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Payment</th>
+                      <th style={{ padding: '16px 20px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {registrants.map((r, i) => (
+                      <tr key={r.registration_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                        <td style={{ padding: '16px 20px' }}>
+                          <div style={{ color: '#f0f4ff', fontWeight: 600 }}>{r.name}</div>
+                          <div style={{ color: '#64748b', fontSize: 11 }}>{r.email}</div>
+                          <div style={{ color: '#444', fontSize: 11, marginTop: 2 }}>📞 {r.mobile_no}</div>
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <div style={{ color: '#cbd5e1' }}>{r.year} · {r.branch}</div>
+                          <div style={{ color: '#475569', fontSize: 11 }}>Div: {r.division} · ID: {r.tuf_id}</div>
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          {r.team_name ? (
+                            <div>
+                              <div style={{ color: '#c084fc', fontWeight: 700 }}>{r.team_name}</div>
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                {JSON.parse(r.team_members || '[]').length + 1} members total
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#475569' }}>Individual</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          {r.payment_ss ? (
+                            <div style={{ cursor: 'pointer' }} onClick={() => setViewingSS(r.payment_ss)}>
+                              <img src={r.payment_ss} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }} />
+                              <div style={{ fontSize: 10, color: '#8b5cf6', marginTop: 4 }}>View Full →</div>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#475569' }}>N/A</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ 
+                              fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '3px 8px', borderRadius: 999, 
+                              background: r.payment_status === 'Verified' ? 'rgba(16,185,129,0.15)' : r.payment_status === 'Rejected' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                              color: r.payment_status === 'Verified' ? '#10b981' : r.payment_status === 'Rejected' ? '#ef4444' : '#f59e0b',
+                              border: `1px solid ${r.payment_status === 'Verified' ? 'rgba(16,185,129,0.3)' : r.payment_status === 'Rejected' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`
+                             }}>
+                              {r.payment_status}
+                            </div>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => updatePaymentStatus(r.registration_id, 'Verified')} style={{ background: '#10b98120', border: 'none', borderRadius: 4, color: '#10b981', fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}>Approve</button>
+                              <button onClick={() => updatePaymentStatus(r.registration_id, 'Rejected')} style={{ background: '#ef444420', border: 'none', borderRadius: 4, color: '#ef4444', fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}>Reject</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL SCREEN IMAGE VIEWER */}
+      {viewingSS && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}
+          onClick={() => setViewingSS(null)}>
+          <div style={{ position: 'absolute', top: 30, right: 30, color: '#fff', fontSize: 40, cursor: 'pointer' }}>×</div>
+          <img src={viewingSS} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, boxShadow: '0 0 100px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>

@@ -244,9 +244,8 @@ export default function ParticleBackground() {
           inset: 0,
           width: '100%',
           height: '100%',
-          zIndex: 0, 
+          zIndex: 0,
           display: 'block',
-          cursor: 'none'
         }}
       />
       <div
@@ -254,16 +253,11 @@ export default function ParticleBackground() {
         id="cur"
         style={{
           position: 'fixed',
-          width: 18,
-          height: 18,
-          borderRadius: '50%',
-          background: 'rgba(0,229,255,0.7)',
-          boxShadow: '0 0 18px 4px rgba(0,229,255,0.5)',
+          width: 0,
+          height: 0,
+          opacity: 0,
           pointerEvents: 'none',
-          zIndex: 9999,
-          transform: 'translate(-50%,-50%)',
-          transition: 'transform 0.05s',
-          mixBlendMode: 'screen'
+          zIndex: -1,
         }}
       />
     </>
