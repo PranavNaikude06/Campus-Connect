@@ -307,7 +307,16 @@ export default function StudentDashboard({ onLogout, user }: Props) {
                         <button onClick={() => setModal(ev)} style={{ flex: 1, padding: '9px', borderRadius: 11, border: `1px solid ${ev.color}40`, background: `${ev.color}15`, color: ev.color, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                           View Details
                         </button>
-                        <button onClick={() => register(ev.id)} style={{ flex: 1, padding: '9px', borderRadius: 11, border: 'none', cursor: isReg ? 'default' : 'pointer', fontWeight: 700, fontSize: 13, background: isReg ? 'rgba(16,185,129,0.2)' : `linear-gradient(135deg,${ev.color},${ev.color}bb)`, color: isReg ? '#10b981' : '#fff' }}>
+                        <button 
+                          onClick={() => {
+                            if (!isReg && (ev.is_paid || ev.team_size_max > 1)) {
+                              setModal(ev);
+                            } else {
+                              register(ev.id);
+                            }
+                          }} 
+                          style={{ flex: 1, padding: '9px', borderRadius: 11, border: 'none', cursor: isReg ? 'default' : 'pointer', fontWeight: 700, fontSize: 13, background: isReg ? 'rgba(16,185,129,0.2)' : `linear-gradient(135deg,${ev.color},${ev.color}bb)`, color: isReg ? '#10b981' : '#fff' }}
+                        >
                           {isReg ? '✓ Registered' : 'Register'}
                         </button>
                       </div>

@@ -100,6 +100,16 @@ export default function LandingPage({ onLogin }: Props) {
       .catch(console.error)
       .finally(() => setEventsLoading(false));
   }, []);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (registerEvent) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [registerEvent]);
   const [regData, setRegData] = useState({ name: '', email: '', className: '', division: '', year: '', mobile_no: '', tuf_id: '' });
   const [regStatus, setRegStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [regError, setRegError] = useState('');
@@ -380,15 +390,15 @@ export default function LandingPage({ onLogin }: Props) {
                   <input required placeholder="Full Name" value={authForm.name} onChange={e => setAuthForm({ ...authForm, name: e.target.value })}
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 18px', borderRadius: 12, color: '#fff', outline: 'none', fontSize: 15 }} />
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(80px, 1fr) 2fr 1fr', gap: 12 }}>
-                    <select required value={authForm.year} onChange={e => setAuthForm({ ...authForm, year: e.target.value })} style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 18px', borderRadius: 12, color: '#fff', fontSize: 15, boxSizing: 'border-box' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: 10 }}>
+                    <select required value={authForm.year} onChange={e => setAuthForm({ ...authForm, year: e.target.value })} style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 12px', borderRadius: 12, color: '#fff', fontSize: 14, boxSizing: 'border-box', outline: 'none' }}>
                       <option value="" style={{ background: '#0f172a' }}>Year</option>
                       <option style={{ background: '#0f172a' }}>FE</option><option style={{ background: '#0f172a' }}>SE</option><option style={{ background: '#0f172a' }}>TE</option><option style={{ background: '#0f172a' }}>BE</option>
                     </select>
                     <input required placeholder="Branch" value={authForm.branch} onChange={e => setAuthForm({ ...authForm, branch: e.target.value })}
-                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 18px', borderRadius: 12, color: '#fff', outline: 'none', fontSize: 15 }} />
-                    <input required placeholder="Div (e.g. A)" value={authForm.division} onChange={e => setAuthForm({ ...authForm, division: e.target.value })}
-                      style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 18px', borderRadius: 12, color: '#fff', outline: 'none', fontSize: 15 }} />
+                      style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 12px', borderRadius: 12, color: '#fff', outline: 'none', fontSize: 14 }} />
+                    <input required placeholder="Div" value={authForm.division} onChange={e => setAuthForm({ ...authForm, division: e.target.value })}
+                      style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '14px 12px', borderRadius: 12, color: '#fff', outline: 'none', fontSize: 14 }} />
                   </div>
 
                   <input required placeholder="Mobile Number" value={authForm.mobile_no} onChange={e => setAuthForm({ ...authForm, mobile_no: e.target.value })}
@@ -569,8 +579,8 @@ export default function LandingPage({ onLogin }: Props) {
                 }}>
                   <div style={{
                     background: 'rgba(15,12,41,0.95)', border: `1px solid ${registerEvent.color}55`, borderRadius: 24, padding: '32px 40px',
-                    width: '100%', maxWidth: 520, boxShadow: `0 30px 60px rgba(0,0,0,0.5), 0 0 40px ${registerEvent.color}20`,
-                    position: 'relative', maxHeight: '90vh', overflowY: 'auto'
+                    width: '100%', maxWidth: 540, boxShadow: `0 30px 60px rgba(0,0,0,0.5), 0 0 40px ${registerEvent.color}20`,
+                    position: 'relative', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', outline: 'none'
                   }}>
                     <div style={{ position: 'absolute', top: 20, right: 24, fontSize: 24, color: '#64748b', cursor: 'pointer' }} onClick={() => { setRegisterEvent(null); setPaymentSS(null); setPaymentSSName(''); setTeamName(''); setTeamMembers([]); }}>×</div>
 

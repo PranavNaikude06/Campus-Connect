@@ -29,7 +29,7 @@ export default function ParticleBackground() {
     `;
 
     const FS = `
-      precision highp float;
+      precision mediump float;
       #define MAX_DROPS 32
 
       uniform vec2 u_res;
@@ -51,7 +51,7 @@ export default function ParticleBackground() {
       float fbm(vec2 p){
         float v=0.0, a=0.5;
         mat2 m = mat2(1.6,1.2,-1.2,1.6);
-        for(int i=0;i<5;i++){ v+=a*noise(p); p=m*p; a*=0.5; }
+        for(int i=0;i<3;i++){ v+=a*noise(p); p=m*p; a*=0.5; }
         return v;
       }
 
@@ -146,8 +146,10 @@ export default function ParticleBackground() {
 
     function resize() {
       if (!canvas || !gl) return;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Cap resolution at 1.5x for performance on Retina screens
+      const dpi = Math.min(window.devicePixelRatio, 1.5);
+      canvas.width = window.innerWidth * dpi;
+      canvas.height = window.innerHeight * dpi;
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
     
